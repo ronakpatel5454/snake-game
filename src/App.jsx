@@ -4,14 +4,49 @@ import LobbyComponent from "./components/LobbyComponent";
 import { generateBoard, rollDice, calculateNewPosition } from "./lib/gameLogic";
 
 export default function App() {
-  const [inGame, setInGame] = useState(false);
-  const [players, setPlayers] = useState([]);
-  const [board, setBoard] = useState(null);
-  const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
-  const [logs, setLogs] = useState([]);
-  const [diceValue, setDiceValue] = useState(null);
+  const [inGame, setInGame] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_inGame");
+      return saved ? JSON.parse(saved) : false;
+    } catch { return false; }
+  });
+  const [players, setPlayers] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_players");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [board, setBoard] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_board");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+  const [currentTurnIndex, setCurrentTurnIndex] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_currentTurnIndex");
+      return saved ? JSON.parse(saved) : 0;
+    } catch { return 0; }
+  });
+  const [logs, setLogs] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_logs");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [diceValue, setDiceValue] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_diceValue");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
   const [isRolling, setIsRolling] = useState(false);
-  const [winner, setWinner] = useState(null);
+  const [winner, setWinner] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_winner");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
 
   // Keep refs up-to-date to completely prevent stale closures in async timeouts
   const playersRef = useRef(players);
@@ -25,13 +60,28 @@ export default function App() {
     boardRef.current = board;
   }, [board]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem("snake_game_inGame", JSON.stringify(inGame));
+      localStorage.setItem("snake_game_players", JSON.stringify(players));
+      localStorage.setItem("snake_game_board", JSON.stringify(board));
+      localStorage.setItem("snake_game_currentTurnIndex", JSON.stringify(currentTurnIndex));
+      localStorage.setItem("snake_game_logs", JSON.stringify(logs));
+      localStorage.setItem("snake_game_diceValue", JSON.stringify(diceValue));
+      localStorage.setItem("snake_game_winner", JSON.stringify(winner));
+    } catch (e) {
+      console.error("Failed to save game state to localStorage", e);
+    }
+  }, [inGame, players, board, currentTurnIndex, logs, diceValue, winner]);
+
   const addLog = (msg) => {
     setLogs(prev => [msg, ...prev].slice(0, 5));
   };
 
   const startGame = (setupPlayers) => {
     setPlayers(setupPlayers);
-    setBoard(generateBoard());
+    const playerSnakeHeads = setupPlayers.map(p => p.ownSnakeNumber);
+    setBoard(generateBoard(playerSnakeHeads));
     setInGame(true);
     setCurrentTurnIndex(0);
     setLogs(["Game started!"]);
@@ -169,7 +219,7 @@ export default function App() {
                       <span>{p.name} {p.isBot && "🤖"}</span>
                     </div>
                     <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
-                      Pos: {p.position} | Safe: {p.safeSnakeNumber}
+                      Pos: {p.position} | Own Snake: {p.ownSnakeNumber}
                     </div>
                   </div>
                 ))}
@@ -187,6 +237,26 @@ export default function App() {
                 ))}
               </div>
             </div>
+
+            {/* Exit/Reset Button */}
+            {!winner && (
+              <button 
+                className="btn btn-outline" 
+                onClick={() => {
+                  if (confirm("Are you sure you want to exit the current match? All progress will be lost.")) {
+                    setInGame(false);
+                    setPlayers([]);
+                    setBoard(null);
+                    setWinner(null);
+                    setLogs([]);
+                    setDiceValue(null);
+                  }
+                }}
+                style={{ width: "100%", borderColor: "#ef4444", color: "#ef4444", marginTop: "1rem" }}
+              >
+                Exit Match
+              </button>
+            )}
 
           </div>
         </div>

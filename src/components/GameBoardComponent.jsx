@@ -89,12 +89,12 @@ export default function GameBoardComponent({ board, players }) {
         );
       })}
 
-      {/* Highlight Safe Snakes */}
+      {/* Highlight Owned Snake Heads */}
       {players.map(p => {
-        const { x, y } = getCoordinates(p.safeSnakeNumber);
+        const { x, y } = getCoordinates(p.ownSnakeNumber);
         return (
           <div
-            key={`safe-${p.id}`}
+            key={`owned-${p.id}`}
             className="animate-pulse-glow"
             style={{
               position: "absolute",
@@ -145,20 +145,37 @@ export default function GameBoardComponent({ board, players }) {
           const midX = (start.cx + end.cx) / 2 + offsetSeed;
           const midY = (start.cy + end.cy) / 2;
 
+          // Find if this snake is owned by any player
+          const ownerPlayer = players.find(p => p.ownSnakeNumber === snake.head);
+          const strokeColor = ownerPlayer ? ownerPlayer.color : "#f97316";
+          const headColor = ownerPlayer ? ownerPlayer.color : "#ea580c";
+
           return (
             <g key={`snake-${idx}`}>
               <path
                 d={`M ${start.cx} ${start.cy} Q ${midX} ${midY} ${end.cx} ${end.cy}`}
                 fill="none"
-                stroke="#ef4444"
+                stroke={strokeColor}
                 strokeWidth={cellSize * 0.15}
                 strokeLinecap="round"
                 opacity="0.9"
               />
               {/* Snake Head */}
-              <circle cx={start.cx} cy={start.cy} r={cellSize * 0.15} fill="#b91c1c" />
+              <circle cx={start.cx} cy={start.cy} r={cellSize * 0.15} fill={headColor} />
               <circle cx={start.cx - 3} cy={start.cy - 3} r={cellSize * 0.03} fill="white" />
               <circle cx={start.cx + 3} cy={start.cy - 3} r={cellSize * 0.03} fill="white" />
+              {/* Tiny crown label for owned snakes */}
+              {ownerPlayer && (
+                <text 
+                  x={start.cx} 
+                  y={start.cy - (cellSize * 0.18)} 
+                  fontSize={cellSize * 0.3 + "px"} 
+                  textAnchor="middle" 
+                  style={{ userSelect: "none" }}
+                >
+                  👑
+                </text>
+              )}
             </g>
           );
         })}

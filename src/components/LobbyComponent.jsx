@@ -6,8 +6,8 @@ export default function LobbyComponent({ onStart }) {
   const [numPlayers, setNumPlayers] = useState(2);
   const [isSinglePlayer, setIsSinglePlayer] = useState(true);
   const [playerConfigs, setPlayerConfigs] = useState([
-    { name: "Player 1", safeSnake: 50 },
-    { name: "Player 2", safeSnake: 60 },
+    { name: "Player 1", ownSnake: 54 },
+    { name: "Player 2", ownSnake: 60 },
   ]);
 
   const handleModeChange = (single) => {
@@ -15,11 +15,11 @@ export default function LobbyComponent({ onStart }) {
     if (single) {
       setNumPlayers(2);
       setPlayerConfigs([
-        { name: "Player", safeSnake: 50 },
-        { name: "Bot", safeSnake: 60 }
+        { name: "Player", ownSnake: 54 },
+        { name: "Bot", ownSnake: 60 }
       ]);
     } else {
-      setPlayerConfigs(Array(numPlayers).fill(0).map((_, i) => ({ name: `Player ${i+1}`, safeSnake: 50 + (i * 10) })));
+      setPlayerConfigs(Array(numPlayers).fill(0).map((_, i) => ({ name: `Player ${i+1}`, ownSnake: 50 + (i * 10) })));
     }
   };
 
@@ -28,7 +28,7 @@ export default function LobbyComponent({ onStart }) {
     setNumPlayers(num);
     const newConfigs = [...playerConfigs];
     while (newConfigs.length < num) {
-      newConfigs.push({ name: `Player ${newConfigs.length + 1}`, safeSnake: 50 + (newConfigs.length * 10) });
+      newConfigs.push({ name: `Player ${newConfigs.length + 1}`, ownSnake: 50 + (newConfigs.length * 10) });
     }
     setPlayerConfigs(newConfigs.slice(0, num));
   };
@@ -38,7 +38,7 @@ export default function LobbyComponent({ onStart }) {
     if (field === 'name') {
       newConfigs[index].name = value;
     } else {
-      newConfigs[index].safeSnake = parseInt(value) || 2;
+      newConfigs[index].ownSnake = parseInt(value) || 15;
     }
     setPlayerConfigs(newConfigs);
   };
@@ -47,22 +47,22 @@ export default function LobbyComponent({ onStart }) {
     // Validation
     const usedCells = new Set();
     for (let config of playerConfigs) {
-      if (config.safeSnake < 2 || config.safeSnake > 99) {
-        alert(`Safe snake for ${config.name} must be between 2 and 99.`);
+      if (config.ownSnake < 15 || config.ownSnake > 99) {
+        alert(`Own snake head for ${config.name} must be between 15 and 99.`);
         return;
       }
-      if (usedCells.has(config.safeSnake)) {
-        alert(`Two players cannot have the same safe snake number (${config.safeSnake}).`);
+      if (usedCells.has(config.ownSnake)) {
+        alert(`Two players cannot have the same own snake number (${config.ownSnake}).`);
         return;
       }
-      usedCells.add(config.safeSnake);
+      usedCells.add(config.ownSnake);
     }
 
     const finalPlayers = playerConfigs.map((c, i) => ({
       id: `p${i}`,
       name: c.name,
       position: 0,
-      safeSnakeNumber: c.safeSnake,
+      ownSnakeNumber: c.ownSnake,
       color: COLORS[i % COLORS.length],
       isBot: isSinglePlayer && i === 1
     }));
@@ -124,18 +124,18 @@ export default function LobbyComponent({ onStart }) {
                 />
               </div>
               <div style={{ flex: "1 1 150px" }}>
-                <label style={{ display: "block", fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>Safe Snake (2-99)</label>
+                <label style={{ display: "block", fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>Own Snake (15-99)</label>
                 <input 
                   type="number" 
-                  min="2" max="99"
-                  value={config.safeSnake}
-                  onChange={(e) => handleConfigChange(idx, 'safeSnake', e.target.value)}
+                  min="15" max="99"
+                  value={config.ownSnake}
+                  onChange={(e) => handleConfigChange(idx, 'ownSnake', e.target.value)}
                   style={{ width: "100%" }}
                 />
               </div>
             </div>
             <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.5rem" }}>
-              If you land on {config.safeSnake} and it has a snake head, you will NOT be bitten.
+              A snake will start at {config.ownSnake}. It will NOT bite you, but it WILL bite other players!
             </p>
           </div>
         ))}

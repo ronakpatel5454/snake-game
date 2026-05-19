@@ -1,12 +1,28 @@
-export function generateBoard() {
+export function generateBoard(playerSnakeHeads = []) {
   const snakes = [];
   const ladders = [];
   const usedCells = new Set([1, 100]); // 1 and 100 cannot be start/end points
 
   const getRandomCell = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-  // Generate 7 snakes
-  for (let i = 0; i < 7; i++) {
+  // 1. Generate Player Owned Snakes first
+  playerSnakeHeads.forEach(head => {
+    let tail = 0;
+    let attempts = 0;
+    while (attempts < 100) {
+      tail = getRandomCell(2, head - 10);
+      if (!usedCells.has(tail)) {
+        usedCells.add(head);
+        usedCells.add(tail);
+        snakes.push({ head, tail });
+        break;
+      }
+      attempts++;
+    }
+  });
+
+  // 2. Generate 5 random snakes
+  for (let i = 0; i < 5; i++) {
     let head = 0, tail = 0;
     let attempts = 0;
     while (attempts < 100) {
@@ -22,7 +38,7 @@ export function generateBoard() {
     }
   }
 
-  // Generate 7 ladders
+  // 3. Generate 7 ladders
   for (let i = 0; i < 7; i++) {
     let bottom = 0, top = 0;
     let attempts = 0;
@@ -84,9 +100,9 @@ export function calculateNewPosition(currentPos, diceValue, board, player) {
     // Check snakes
     const snake = board.snakes.find(s => s.head === newPos);
     if (snake) {
-      if (newPos === player.safeSnakeNumber) {
+      if (newPos === player.ownSnakeNumber) {
         wasSafeSnake = true;
-        message += ` Landed on snake at ${snake.head}, but it's your SAFE SNAKE! Immune!`;
+        message += ` Landed on your OWN snake at ${snake.head}! Immune!`;
       } else {
         newPos = snake.tail;
         message += ` Bitten by a snake! Slide down from ${snake.head} to ${snake.tail}.`;
