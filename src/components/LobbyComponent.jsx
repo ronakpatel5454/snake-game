@@ -1,23 +1,16 @@
-"use client";
-
 import { useState } from "react";
-import { Player } from "../../lib/gameLogic";
-
-interface LobbyComponentProps {
-  onStart: (players: Player[]) => void;
-}
 
 const COLORS = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
 
-export default function LobbyComponent({ onStart }: LobbyComponentProps) {
-  const [numPlayers, setNumPlayers] = useState<number>(2);
+export default function LobbyComponent({ onStart }) {
+  const [numPlayers, setNumPlayers] = useState(2);
   const [isSinglePlayer, setIsSinglePlayer] = useState(true);
-  const [playerConfigs, setPlayerConfigs] = useState<{name: string, safeSnake: number}[]>([
+  const [playerConfigs, setPlayerConfigs] = useState([
     { name: "Player 1", safeSnake: 50 },
     { name: "Player 2", safeSnake: 60 },
   ]);
 
-  const handleModeChange = (single: boolean) => {
+  const handleModeChange = (single) => {
     setIsSinglePlayer(single);
     if (single) {
       setNumPlayers(2);
@@ -30,7 +23,7 @@ export default function LobbyComponent({ onStart }: LobbyComponentProps) {
     }
   };
 
-  const handleNumPlayersChange = (num: number) => {
+  const handleNumPlayersChange = (num) => {
     if (isSinglePlayer) return;
     setNumPlayers(num);
     const newConfigs = [...playerConfigs];
@@ -40,7 +33,7 @@ export default function LobbyComponent({ onStart }: LobbyComponentProps) {
     setPlayerConfigs(newConfigs.slice(0, num));
   };
 
-  const handleConfigChange = (index: number, field: 'name' | 'safeSnake', value: string) => {
+  const handleConfigChange = (index, field, value) => {
     const newConfigs = [...playerConfigs];
     if (field === 'name') {
       newConfigs[index].name = value;
@@ -52,7 +45,7 @@ export default function LobbyComponent({ onStart }: LobbyComponentProps) {
 
   const validateAndStart = () => {
     // Validation
-    const usedCells = new Set<number>();
+    const usedCells = new Set();
     for (let config of playerConfigs) {
       if (config.safeSnake < 2 || config.safeSnake > 99) {
         alert(`Safe snake for ${config.name} must be between 2 and 99.`);
@@ -65,7 +58,7 @@ export default function LobbyComponent({ onStart }: LobbyComponentProps) {
       usedCells.add(config.safeSnake);
     }
 
-    const finalPlayers: Player[] = playerConfigs.map((c, i) => ({
+    const finalPlayers = playerConfigs.map((c, i) => ({
       id: `p${i}`,
       name: c.name,
       position: 0,

@@ -1,25 +1,35 @@
-"use client";
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import GameBoardComponent from "./components/GameBoardComponent";
 import LobbyComponent from "./components/LobbyComponent";
-import { Player, GameBoard, generateBoard, rollDice, calculateNewPosition } from "../lib/gameLogic";
+import { generateBoard, rollDice, calculateNewPosition } from "./lib/gameLogic";
 
-export default function Home() {
+export default function App() {
   const [inGame, setInGame] = useState(false);
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [board, setBoard] = useState<GameBoard | null>(null);
+  const [players, setPlayers] = useState([]);
+  const [board, setBoard] = useState(null);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [diceValue, setDiceValue] = useState<number | null>(null);
+  const [logs, setLogs] = useState([]);
+  const [diceValue, setDiceValue] = useState(null);
   const [isRolling, setIsRolling] = useState(false);
-  const [winner, setWinner] = useState<Player | null>(null);
+  const [winner, setWinner] = useState(null);
 
-  const addLog = (msg: string) => {
+  // Keep refs up-to-date to completely prevent stale closures in async timeouts
+  const playersRef = useRef(players);
+  const boardRef = useRef(board);
+
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
+
+  useEffect(() => {
+    boardRef.current = board;
+  }, [board]);
+
+  const addLog = (msg) => {
     setLogs(prev => [msg, ...prev].slice(0, 5));
   };
 
-  const startGame = (setupPlayers: Player[]) => {
+  const startGame = (setupPlayers) => {
     setPlayers(setupPlayers);
     setBoard(generateBoard());
     setInGame(true);
@@ -29,7 +39,7 @@ export default function Home() {
   };
 
   const nextTurn = () => {
-    setCurrentTurnIndex(prev => (prev + 1) % players.length);
+    setCurrentTurnIndex(prev => (prev + 1) % playersRef.current.length);
   };
 
   const handleRoll = () => {
@@ -41,23 +51,33 @@ export default function Home() {
     executeTurn(currentPlayer);
   };
 
-  const executeTurn = (player: Player) => {
+  const executeTurn = (player) => {
     setIsRolling(true);
     const roll = rollDice();
     setDiceValue(roll);
 
     setTimeout(() => {
-      const { position, message, wasSafeSnake, grantsAnotherTurn } = calculateNewPosition(player.position, roll, board!, player);
+      const latestBoard = boardRef.current;
+      const latestPlayers = playersRef.current;
+      const currentPlayer = latestPlayers.find(p => p.id === player.id);
+
+      if (!currentPlayer || !latestBoard) {
+        setIsRolling(false);
+        return;
+      }
+
+      const { position, message, wasSafeSnake, grantsAnotherTurn } = calculateNewPosition(
+        currentPlayer.position, 
+        roll, 
+        latestBoard, 
+        currentPlayer
+      );
       
-      const newPlayers = [...players];
-      const pIndex = newPlayers.findIndex(p => p.id === player.id);
-      newPlayers[pIndex].position = position;
-      setPlayers(newPlayers);
-      
+      setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position } : p));
       addLog(`${player.name}: ${message}`);
 
       if (position === 100) {
-        setWinner(player);
+        setWinner(currentPlayer);
         addLog(`🎉 ${player.name} wins the game! 🎉`);
       } else {
         if (!grantsAnotherTurn) {
@@ -68,17 +88,17 @@ export default function Home() {
     }, 1000);
   };
 
-  // Bot logic inside useEffect
+  // Bot logic inside useEffect (players is NOT a dependency to prevent infinite loops)
   useEffect(() => {
-    if (inGame && !winner && players[currentTurnIndex]?.isBot && !isRolling) {
+    const latestPlayers = playersRef.current;
+    const activePlayer = latestPlayers[currentTurnIndex];
+    if (inGame && !winner && activePlayer?.isBot && !isRolling) {
       const timer = setTimeout(() => {
-        executeTurn(players[currentTurnIndex]);
+        executeTurn(activePlayer);
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [inGame, winner, currentTurnIndex, isRolling, players]);
-
-
+  }, [inGame, winner, currentTurnIndex, isRolling]);
 
   return (
     <main style={{ padding: "2rem", display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
@@ -107,8 +127,8 @@ export default function Home() {
                 {/* Current Turn */}
                 <div style={{ textAlign: "center" }}>
                   <h3 style={{ color: "var(--text-muted)", marginBottom: "0.5rem" }}>Current Turn</h3>
-                  <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: players[currentTurnIndex].color }}>
-                    {players[currentTurnIndex].name} {players[currentTurnIndex].isBot && "(Bot)"}
+                  <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: players[currentTurnIndex]?.color }}>
+                    {players[currentTurnIndex]?.name} {players[currentTurnIndex]?.isBot && "(Bot)"}
                   </div>
                 </div>
 
@@ -129,7 +149,7 @@ export default function Home() {
                   <button 
                     className="btn" 
                     onClick={handleRoll} 
-                    disabled={isRolling || players[currentTurnIndex].isBot}
+                    disabled={isRolling || players[currentTurnIndex]?.isBot}
                     style={{ width: "100%" }}
                   >
                     {isRolling ? "Rolling..." : "Roll Dice"}

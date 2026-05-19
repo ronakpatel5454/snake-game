@@ -1,15 +1,7 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
-import { GameBoard, Player } from "../../lib/gameLogic";
 
-interface GameBoardProps {
-  board: GameBoard;
-  players: Player[];
-}
-
-export default function GameBoardComponent({ board, players }: GameBoardProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+export default function GameBoardComponent({ board, players }) {
+  const containerRef = useRef(null);
   const [boardSize, setBoardSize] = useState(500);
 
   useEffect(() => {
@@ -26,7 +18,7 @@ export default function GameBoardComponent({ board, players }: GameBoardProps) {
 
   const cellSize = boardSize / 10;
 
-  const getCoordinates = (cell: number) => {
+  const getCoordinates = (cell) => {
     if (cell === 0) {
       // Home position, below the board
       return {
@@ -148,8 +140,9 @@ export default function GameBoardComponent({ board, players }: GameBoardProps) {
           const start = getCoordinates(snake.head);
           const end = getCoordinates(snake.tail);
           
-          // Curve logic
-          const midX = (start.cx + end.cx) / 2 + (Math.random() * 40 - 20);
+          // Deterministic curve offset logic based on cells to prevent wiggling/jittering
+          const offsetSeed = ((snake.head * 7 + snake.tail * 13) % 40) - 20;
+          const midX = (start.cx + end.cx) / 2 + offsetSeed;
           const midY = (start.cy + end.cy) / 2;
 
           return (
