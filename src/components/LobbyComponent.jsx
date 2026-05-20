@@ -13,6 +13,7 @@ export default function LobbyComponent({ onStart, onBack, gameMode }) {
   // Default parameters as currently used
   const [numSnakes, setNumSnakes] = useState(3);
   const [numLadders, setNumLadders] = useState(5);
+  const [customBoardElements, setCustomBoardElements] = useState(false);
 
   const handleSnakesChange = (val) => {
     let num = parseInt(val);
@@ -80,14 +81,30 @@ export default function LobbyComponent({ onStart, onBack, gameMode }) {
       }
     }
 
-    if (numSnakes < 3 || numSnakes > 10) {
-      alert("Number of snakes must be between 3 and 10.");
-      return;
+    if (customBoardElements) {
+      if (numSnakes < 3 || numSnakes > 10) {
+        alert("Number of snakes must be between 3 and 10.");
+        return;
+      }
+
+      if (numLadders < 0 || numLadders > 10) {
+        alert("Number of ladders must be between 0 and 10.");
+        return;
+      }
     }
 
-    if (numLadders < 0 || numLadders > 10) {
-      alert("Number of ladders must be between 0 and 10.");
-      return;
+    // Determine final snakes & ladders based on custom checkbox and mode
+    let finalSnakes = numSnakes;
+    let finalLadders = numLadders;
+
+    if (!customBoardElements) {
+      if (gameMode === "classic") {
+        finalSnakes = Math.floor(Math.random() * 3) + 5; // 5 to 7
+        finalLadders = Math.floor(Math.random() * 4) + 3; // 3 to 6
+      } else {
+        finalSnakes = 3;
+        finalLadders = 5;
+      }
     }
 
     const finalPlayers = playerConfigs.map((c, i) => ({
@@ -101,7 +118,7 @@ export default function LobbyComponent({ onStart, onBack, gameMode }) {
       lastRoll: 1
     }));
 
-    onStart(finalPlayers, numSnakes, numLadders);
+    onStart(finalPlayers, finalSnakes, finalLadders);
   };
 
   return (
@@ -179,8 +196,48 @@ export default function LobbyComponent({ onStart, onBack, gameMode }) {
         ))}
       </div>
 
-      {/* Board Elements Customization */}
-      {gameMode !== "classic" && (
+      {/* Optional Board Elements Customization Toggle (Both Modes) */}
+      <div 
+        style={{ 
+          display: "flex", 
+          alignItems: "center", 
+          gap: "10px", 
+          marginBottom: "1.5rem", 
+          background: "rgba(255,255,255,0.04)", 
+          padding: "0.75rem 1rem", 
+          borderRadius: "12px", 
+          border: "1.5px solid rgba(255,255,255,0.06)",
+          userSelect: "none"
+        }}
+      >
+        <input 
+          type="checkbox" 
+          id="custom-elements-toggle"
+          checked={customBoardElements}
+          onChange={(e) => setCustomBoardElements(e.target.checked)}
+          style={{ 
+            width: "18px", 
+            height: "18px", 
+            cursor: "pointer", 
+            accentColor: "var(--p1-color)" 
+          }}
+        />
+        <label 
+          htmlFor="custom-elements-toggle" 
+          style={{ 
+            fontSize: "0.9rem", 
+            fontWeight: "bold", 
+            color: "white", 
+            cursor: "pointer",
+            flex: 1
+          }}
+        >
+          ⚙️ Customize Snake & Ladder quantities?
+        </label>
+      </div>
+
+      {/* Conditionally Render Customization Input Fields */}
+      {customBoardElements && (
         <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem", flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 200px" }}>
             <label style={{ display: "block", marginBottom: "0.5rem", color: "var(--text-muted)", fontSize: "0.9rem" }}>

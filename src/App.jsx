@@ -140,7 +140,7 @@ function Premium3DDice({ value, color, isRolling }) {
   );
 }
 
-function PlayerCornerCard({ player, isActive, isRolling, onRoll }) {
+function PlayerCornerCard({ player, isActive, isRolling, isDiceRolling, onRoll }) {
   if (!player) return null;
 
   return (
@@ -192,7 +192,7 @@ function PlayerCornerCard({ player, isActive, isRolling, onRoll }) {
         <Premium3DDice
           value={player.lastRoll || 1}
           color={player.color}
-          isRolling={isActive && isRolling}
+          isRolling={isActive && isDiceRolling}
         />
       </div>
 
@@ -344,6 +344,7 @@ export default function App() {
     } catch { return null; }
   });
   const [isRolling, setIsRolling] = useState(false);
+  const [isDiceRolling, setIsDiceRolling] = useState(false);
   const [gameMode, setGameMode] = useState(() => {
     try {
       const saved = localStorage.getItem("snake_game_gameMode");
@@ -411,8 +412,9 @@ export default function App() {
     executeTurn(currentPlayer);
   };
 
-  const executeTurn = (player) => {
-    setIsRolling(true);
+  const executeTurn = async (player) => {
+    setIsRolling(true); // turn is busy, blocks double rolls
+    setIsDiceRolling(true); // start spinning the 3D dice!
 
     // Roll 6 automatically on 6th attempt if player has failed to unlock 5 times
     const isPlayerAtHome = player.position === 0;
@@ -422,49 +424,130 @@ export default function App() {
     const roll = isGuaranteedSix ? 6 : rollDice();
     setDiceValue(roll);
 
-    setTimeout(() => {
-      const latestBoard = boardRef.current;
-      const latestPlayers = playersRef.current;
-      const currentPlayer = latestPlayers.find(p => p.id === player.id);
+    // Set the player's lastRoll immediately so it will be ready when the spin finishes
+    setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, lastRoll: roll } : p));
 
-      if (!currentPlayer || !latestBoard) {
-        setIsRolling(false);
-        return;
-      }
+    // 1. Wait 1200ms for dice rolling animation to complete
+    await new Promise(resolve => setTimeout(resolve, 1200));
 
-      const { position, message, wasSafeSnake, grantsAnotherTurn } = calculateNewPosition(
-        currentPlayer.position,
-        roll,
-        latestBoard,
-        currentPlayer
-      );
+    // 2. Stop dice spinning! (Dice shows the settled face value)
+    setIsDiceRolling(false);
 
-      // Manage unlock pity attempts
-      let updatedAttempts = currentPlayer.unlockAttempts || 0;
-      if (currentPlayer.position === 0) {
-        if (roll === 6) {
-          updatedAttempts = 0; // successfully unlocked
-        } else {
-          updatedAttempts += 1; // failed unlock attempt
-        }
-      }
+    // 3. Pause 300ms so they see the landed number and dice has fully settled
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-      setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position, unlockAttempts: updatedAttempts, lastRoll: roll } : p));
+    const latestBoard = boardRef.current;
+    const latestPlayers = playersRef.current;
+    const currentPlayer = latestPlayers.find(p => p.id === player.id);
 
-      // const pityLabel = isGuaranteedSix ? " (Guaranteed 6 on 6th attempt!)" : "";
-      const pityLabel = "";
-      addLog(`${player.name}: ${message}${pityLabel}`);
-
-      if (position === 100) {
-        setWinner(currentPlayer);
-        addLog(`🎉 ${player.name} wins the game! 🎉`);
-      } else {
-        if (!grantsAnotherTurn) {
-          nextTurn();
-        }
-      }
+    if (!currentPlayer || !latestBoard) {
       setIsRolling(false);
-    }, 1000);
+      return;
+    }
+
+    let currentPos = currentPlayer.position;
+    let updatedAttempts = currentPlayer.unlockAttempts || 0;
+    let grantsAnotherTurn = false;
+    let logMsg = "";
+
+    if (currentPos === 0) {
+      // Home state unlocking logic
+      if (roll === 6) {
+        updatedAttempts = 0; // successfully unlocked
+        currentPos = 1;
+        logMsg = `Unlocked from home! You get another turn.`;
+        grantsAnotherTurn = true;
+
+        // Slide token from bottom starting tray to cell 1
+        setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: 1, unlockAttempts: 0, lastRoll: roll } : p));
+        await new Promise(resolve => setTimeout(resolve, 600)); // wait for single slide animation
+      } else {
+        updatedAttempts += 1; // failed unlock attempt
+        logMsg = `Rolled a ${roll}. Need a 6 to unlock from home.`;
+        
+        setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, unlockAttempts: updatedAttempts, lastRoll: roll } : p));
+        await new Promise(resolve => setTimeout(resolve, 600));
+      }
+    } else {
+      // Normal grid-based walking
+      const targetRollPos = currentPos + roll;
+      
+      if (targetRollPos > 100) {
+        logMsg = `Rolled a ${roll}. Need exact roll to reach 100. Cannot move.`;
+        setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, lastRoll: roll } : p));
+        await new Promise(resolve => setTimeout(resolve, 600));
+      } else {
+        // Move one by one cell! (Snappy, continuous walking)
+        for (let step = currentPos + 1; step <= targetRollPos; step++) {
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
+          await new Promise(resolve => setTimeout(resolve, 350));
+        }
+
+        // Stop walking animation
+        setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isWalking: false } : p));
+
+        currentPos = targetRollPos;
+        await new Promise(resolve => setTimeout(resolve, 400)); // Pause briefly at landing cell
+
+        // Check for board elements (snakes & ladders)
+        const ladder = latestBoard.ladders.find(l => l.bottom === currentPos);
+        const snake = latestBoard.snakes.find(s => s.head === currentPos);
+
+        if (ladder) {
+          logMsg = `Rolled a ${roll}. Climbed a ladder from ${ladder.bottom} to ${ladder.top}!`;
+          
+          // Toggle climbing leans/pulses
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: true } : p));
+          await new Promise(resolve => setTimeout(resolve, 50));
+
+          // Climb/slide up the ladder
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: ladder.top } : p));
+          await new Promise(resolve => setTimeout(resolve, 900));
+
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: false } : p));
+          currentPos = ladder.top;
+        } else if (snake) {
+          if (gameMode !== "classic" && currentPos === currentPlayer.ownSnakeNumber) {
+            logMsg = `Rolled a ${roll}. Landed on your OWN snake at ${snake.head}! Immune!`;
+          } else {
+            logMsg = `Rolled a ${roll}. Bitten by a snake! Slide down from ${snake.head} to ${snake.tail}.`;
+
+            // 1. Shaking panic at snake head
+            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: true } : p));
+            await new Promise(resolve => setTimeout(resolve, 750));
+
+            // 2. Swallow slide down to snake tail
+            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: false, isSwallowed: true } : p));
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: snake.tail } : p));
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isSwallowed: false } : p));
+            currentPos = snake.tail;
+          }
+        } else {
+          logMsg = `Rolled a ${roll}.`;
+        }
+
+        if (roll === 6) {
+          grantsAnotherTurn = true;
+          logMsg += " Rolled a 6, so you get another turn!";
+        }
+      }
+    }
+
+    addLog(`${player.name}: ${logMsg}`);
+
+    if (currentPos === 100) {
+      setWinner(currentPlayer);
+      addLog(`🎉 ${player.name} wins the game! 🎉`);
+    } else {
+      if (!grantsAnotherTurn) {
+        nextTurn();
+      }
+    }
+    setIsRolling(false);
   };
 
   // Bot logic inside useEffect (players is NOT a dependency to prevent infinite loops)
@@ -536,19 +619,21 @@ export default function App() {
                   player={players[0]}
                   isActive={currentTurnIndex === 0}
                   isRolling={isRolling}
+                  isDiceRolling={isDiceRolling}
                   onRoll={handleRoll}
                 />
                 <PlayerCornerCard
                   player={players[2]}
                   isActive={currentTurnIndex === 2}
                   isRolling={isRolling}
+                  isDiceRolling={isDiceRolling}
                   onRoll={handleRoll}
                 />
               </div>
 
               {/* Center Column (GameBoard Component) */}
               <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", maxWidth: "550px", margin: "0 auto" }}>
-                {board && <GameBoardComponent board={board} players={players} />}
+                {board && <GameBoardComponent board={board} players={players} gameMode={gameMode} />}
               </div>
 
               {/* Right Column (P2 Top, P4 Bottom) */}
@@ -557,12 +642,14 @@ export default function App() {
                   player={players[1]}
                   isActive={currentTurnIndex === 1}
                   isRolling={isRolling}
+                  isDiceRolling={isDiceRolling}
                   onRoll={handleRoll}
                 />
                 <PlayerCornerCard
                   player={players[3]}
                   isActive={currentTurnIndex === 3}
                   isRolling={isRolling}
+                  isDiceRolling={isDiceRolling}
                   onRoll={handleRoll}
                 />
               </div>

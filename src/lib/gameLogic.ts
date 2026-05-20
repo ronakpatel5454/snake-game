@@ -26,8 +26,16 @@ export function generateBoard(): GameBoard {
   const snakes: Snake[] = [];
   const ladders: Ladder[] = [];
   const usedCells = new Set<number>([1, 100]); // 1 and 100 cannot be start/end points
+  const snakeHeads = new Set<number>();
 
   const getRandomCell = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+  const causesSequenceOfThree = (h: number, existingHeads: Set<number>): boolean => {
+    if (existingHeads.has(h - 1) && existingHeads.has(h - 2)) return true;
+    if (existingHeads.has(h - 1) && existingHeads.has(h + 1)) return true;
+    if (existingHeads.has(h + 1) && existingHeads.has(h + 2)) return true;
+    return false;
+  };
 
   // Generate 7 snakes
   for (let i = 0; i < 7; i++) {
@@ -36,10 +44,11 @@ export function generateBoard(): GameBoard {
     while (attempts < 100) {
       head = getRandomCell(15, 99);
       tail = getRandomCell(2, head - 10);
-      if (!usedCells.has(head) && !usedCells.has(tail)) {
+      if (!usedCells.has(head) && !usedCells.has(tail) && !causesSequenceOfThree(head, snakeHeads)) {
         usedCells.add(head);
         usedCells.add(tail);
         snakes.push({ head, tail });
+        snakeHeads.add(head);
         break;
       }
       attempts++;
@@ -74,7 +83,8 @@ export function calculateNewPosition(
   currentPos: number,
   diceValue: number,
   board: GameBoard,
-  player: Player
+  player: Player,
+  gameMode: string = "own-snake"
 ): { position: number; message: string; wasSafeSnake: boolean; grantsAnotherTurn: boolean } {
   let newPos = currentPos;
   let message = `Rolled a ${diceValue}.`;
@@ -114,7 +124,7 @@ export function calculateNewPosition(
     // Check snakes
     const snake = board.snakes.find(s => s.head === newPos);
     if (snake) {
-      if (newPos === player.safeSnakeNumber) {
+      if (gameMode !== "classic" && newPos === player.safeSnakeNumber) {
         wasSafeSnake = true;
         message += ` Landed on snake at ${snake.head}, but it's your SAFE SNAKE! Immune!`;
       } else {

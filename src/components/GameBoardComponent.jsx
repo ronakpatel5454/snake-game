@@ -153,7 +153,7 @@ function CuteBoyCookie({ color, size = "100%", style }) {
   );
 }
 
-export default function GameBoardComponent({ board, players }) {
+export default function GameBoardComponent({ board, players, gameMode }) {
   const containerRef = useRef(null);
   const [boardSize, setBoardSize] = useState(500);
 
@@ -218,6 +218,48 @@ export default function GameBoardComponent({ board, players }) {
         boxSizing: "border-box"
       }}
     >
+      <style>{`
+        /* Quick high-frequency panic shaking animation for snake bites */
+        @keyframes cookie-panic-shake {
+          0% { transform: translate(0, 0) rotate(0deg); }
+          10% { transform: translate(-3px, -1.5px) rotate(-4deg); }
+          20% { transform: translate(-4px, 0px) rotate(4deg); }
+          30% { transform: translate(0px, 2.5px) rotate(0deg); }
+          40% { transform: translate(3px, -1.5px) rotate(4deg); }
+          50% { transform: translate(-1.5px, 3px) rotate(-4deg); }
+          60% { transform: translate(-4px, 1.5px) rotate(0deg); }
+          70% { transform: translate(3px, 1.5px) rotate(-4deg); }
+          80% { transform: translate(-1.5px, -1.5px) rotate(4deg); }
+          90% { transform: translate(1.5px, 3px) rotate(2deg); }
+          100% { transform: translate(0, 0) rotate(0deg); }
+        }
+
+        /* Swallowing/sliding animation down the snake */
+        @keyframes cookie-snake-slide {
+          0% { transform: scale(1) rotate(0deg); filter: brightness(1); }
+          20% { transform: scale(0.6) rotate(45deg) translateY(-2px); filter: brightness(0.8); }
+          50% { transform: scale(0.45) rotate(180deg) translateY(0); filter: brightness(0.65); }
+          80% { transform: scale(0.6) rotate(315deg) translateY(2px); filter: brightness(0.85); }
+          100% { transform: scale(1) rotate(360deg); filter: brightness(1); }
+        }
+
+        /* Ladder climbing tilt & vertical bounce animation */
+        @keyframes cookie-ladder-climb {
+          0% { transform: scale(1.02) translateY(0) rotate(-4deg); }
+          50% { transform: scale(1.08) translateY(-4px) rotate(4deg); }
+          100% { transform: scale(1.02) translateY(0) rotate(-4deg); }
+        }
+
+        /* Continuous cartoon bobbing/stepping walk animation */
+        @keyframes cookie-walk {
+          0% { transform: translateY(0) rotate(-6deg) scaleY(1); }
+          25% { transform: translateY(-7px) rotate(0deg) scaleY(0.95); }
+          50% { transform: translateY(0) rotate(6deg) scaleY(1); }
+          75% { transform: translateY(-7px) rotate(0deg) scaleY(0.95); }
+          100% { transform: translateY(0) rotate(-6deg) scaleY(1); }
+        }
+      `}</style>
+
       {/* Draw Cell Backgrounds */}
       {cells.map((cell) => {
         const { x, y } = getCoordinates(cell);
@@ -264,7 +306,7 @@ export default function GameBoardComponent({ board, players }) {
       })}
 
       {/* Highlight Owned Snake Heads */}
-      {players.map(p => {
+      {gameMode !== "classic" && players.map(p => {
         const { x, y } = getCoordinates(p.ownSnakeNumber);
         return (
           <div
@@ -361,7 +403,7 @@ export default function GameBoardComponent({ board, players }) {
           );
         })}
 
-        {/* Snakes (Slender crawling green S-snakes with spots) */}
+        {/* Snakes (Gorgeous round curved tapered serpentine snakes) */}
         {board.snakes.map((snake, idx) => {
           const start = getCoordinates(snake.head);
           const end = getCoordinates(snake.tail);
@@ -374,96 +416,156 @@ export default function GameBoardComponent({ board, players }) {
           const normalX = -uy;
           const normalY = ux;
 
-          // S-curve wave offset using cubic bezier curves
-          const wiggleAmp = cellSize * 0.4;
-          const wiggleDir = (snake.head % 2 === 0) ? 1 : -1;
-          const cp1x = start.cx + dx * 0.33 + normalX * wiggleAmp * wiggleDir;
-          const cp1y = start.cy + dy * 0.33 + normalY * wiggleAmp * wiggleDir;
-          const cp2x = start.cx + dx * 0.66 - normalX * wiggleAmp * wiggleDir;
-          const cp2y = start.cy + dy * 0.66 - normalY * wiggleAmp * wiggleDir;
+          // Generate a beautifully curved serpentine path using smooth waves and a taper envelope.
+          // This keeps the frequency low (1.2 to 1.8) and ensures the wave ends exactly at 0 at both head and tail.
+          const points = [];
+          const numSteps = 35; // Highly optimized for DOM rendering while remaining perfectly smooth
+          
+          // Lower frequency = lazy, elegant, curved serpentine coils instead of hyper zigzags
+          const frequency = len > cellSize * 4 ? 1.8 : 1.2;
+          const amplitude = Math.min(cellSize * 0.48, len * 0.22); 
+          
+          for (let i = 0; i <= numSteps; i++) {
+            const t = i / numSteps;
+            const baseX = start.cx + dx * t;
+            const baseY = start.cy + dy * t;
+            
+            // Sine envelope makes sure offset starts exactly at 0 (head) and ends exactly at 0 (tail)
+            const direction = snake.head % 2 === 0 ? 1 : -1;
+            const envelope = Math.sin(t * Math.PI);
+            const waveOffset = Math.sin(t * Math.PI * frequency) * envelope * amplitude * direction;
+            
+            points.push({
+              x: baseX + normalX * waveOffset,
+              y: baseY + normalY * waveOffset
+            });
+          }
 
           // Find if this snake is owned by any player
-          const ownerPlayer = players.find(p => p.ownSnakeNumber === snake.head);
+          const ownerPlayer = gameMode !== "classic" ? players.find(p => p.ownSnakeNumber === snake.head) : null;
 
-          // Slender bodies
-          const bodyWidth = cellSize * 0.16; // Elegant and thin
-          const patternWidth = bodyWidth * 0.6;
-          
-          // Green colors
-          const baseColor = ownerPlayer ? ownerPlayer.color : "#22c55e"; // Owner's color or classic green
-          const patternColor = ownerPlayer ? "white" : "#15803d"; // Dark green spots or owner highlights
+          // Curated colors matching owner colors or a vibrant classic green
+          const baseColor = ownerPlayer ? ownerPlayer.color : "#22c55e"; 
+          const patternColor = ownerPlayer ? "white" : "#15803d"; 
 
-          // Calculate direction vector at the head for tongue and eyes alignment
-          const headDx = cp1x - start.cx;
-          const headDy = cp1y - start.cy;
+          // Base dimensions for the 3D-cylindrical, tapered body
+          const bodyWidth = cellSize * 0.22; 
+
+          // Calculate precise local tangent vector at the head for tongue and eyes alignment
+          const headDx = points[1].x - points[0].x;
+          const headDy = points[1].y - points[0].y;
           const headLen = Math.sqrt(headDx*headDx + headDy*headDy) || 1;
           const headUx = headDx / headLen;
           const headUy = headDy / headLen;
 
-          // Tongue vector
-          const tx = -headUx * (cellSize * 0.22);
-          const ty = -headUy * (cellSize * 0.22);
+          // Tongue vector (pointing forward along the local tangent)
+          const tx = -headUx * (cellSize * 0.24);
+          const ty = -headUy * (cellSize * 0.24);
 
           return (
-            <g key={`snake-${idx}`} opacity="0.95">
-              {/* 3D Drop Shadow */}
-              <path
-                d={`M ${start.cx + 2} ${start.cy + 2} C ${cp1x + 2} ${cp1y + 2} ${cp2x + 2} ${cp2y + 2} ${end.cx + 2} ${end.cy + 2}`}
-                fill="none"
-                stroke="rgba(0, 0, 0, 0.12)"
-                strokeWidth={bodyWidth}
-                strokeLinecap="round"
-              />
+            <g key={`snake-${idx}`} opacity="0.98">
+              {/* 1. 3D Drop Shadow offset using translated circles */}
+              {points.map((p, pIdx) => {
+                const t = pIdx / numSteps;
+                // Taper shadow radius smoothly from head to tail
+                const radius = cellSize * (0.13 - t * 0.08);
+                return (
+                  <circle
+                    key={`shadow-${pIdx}`}
+                    cx={p.x + 2.5}
+                    cy={p.y + 2.5}
+                    r={radius}
+                    fill="rgba(15, 23, 42, 0.18)"
+                  />
+                );
+              })}
 
-              {/* Snake Body Outline */}
-              <path
-                d={`M ${start.cx} ${start.cy} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${end.cx} ${end.cy}`}
-                fill="none"
-                stroke="#1e293b"
-                strokeWidth={bodyWidth + 2}
-                strokeLinecap="round"
-              />
+              {/* 2. Snake Body Outline for crisp separation */}
+              {points.map((p, pIdx) => {
+                const t = pIdx / numSteps;
+                const radius = cellSize * (0.13 - t * 0.08) + 1.5;
+                return (
+                  <circle
+                    key={`outline-${pIdx}`}
+                    cx={p.x}
+                    cy={p.y}
+                    r={radius}
+                    fill="#1e293b"
+                  />
+                );
+              })}
 
-              {/* Snake Body Base */}
-              <path
-                d={`M ${start.cx} ${start.cy} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${end.cx} ${end.cy}`}
-                fill="none"
-                stroke={baseColor}
-                strokeWidth={bodyWidth}
-                strokeLinecap="round"
-              />
+              {/* 3. Snake Body Base */}
+              {points.map((p, pIdx) => {
+                const t = pIdx / numSteps;
+                const radius = cellSize * (0.13 - t * 0.08);
+                return (
+                  <circle
+                    key={`body-${pIdx}`}
+                    cx={p.x}
+                    cy={p.y}
+                    r={radius}
+                    fill={baseColor}
+                  />
+                );
+              })}
 
-              {/* Pattern Overlay (Spots along body) */}
-              <path
-                d={`M ${start.cx} ${start.cy} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${end.cx} ${end.cy}`}
-                fill="none"
-                stroke={patternColor}
-                strokeWidth={patternWidth}
-                strokeLinecap="round"
-                strokeDasharray={`0 ${cellSize * 0.25}`}
-              />
+              {/* 4. Pattern Overlay (Premium rounded spots winding along body, matching the taper) */}
+              {points.map((p, pIdx) => {
+                if (pIdx % 5 !== 0 || pIdx < 3 || pIdx > numSteps - 3) return null;
+                const t = pIdx / numSteps;
+                const bodyRadius = cellSize * (0.13 - t * 0.08);
+                const radius = bodyRadius * 0.45;
+                return (
+                  <circle
+                    key={`spot-${pIdx}`}
+                    cx={p.x}
+                    cy={p.y}
+                    r={radius}
+                    fill={patternColor}
+                  />
+                );
+              })}
+
+              {/* 5. Glossy Spine Highlight for 3D rounded glassy effect */}
+              {points.map((p, pIdx) => {
+                const t = pIdx / numSteps;
+                const bodyRadius = cellSize * (0.13 - t * 0.08);
+                const radius = bodyRadius * 0.32;
+                return (
+                  <circle
+                    key={`highlight-${pIdx}`}
+                    cx={p.x - bodyRadius * 0.15}
+                    cy={p.y - bodyRadius * 0.15}
+                    r={radius}
+                    fill="rgba(255, 255, 255, 0.38)"
+                  />
+                );
+              })}
 
               {/* Cute Red Forked Tongue */}
-              <line x1={start.cx} y1={start.cy} x2={start.cx + tx} y2={start.cy + ty} stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" />
-              <line x1={start.cx + tx} y1={start.cy + ty} x2={start.cx + tx - headUy * 3.5 - headUx * 2.5} y2={start.cy + ty + headUx * 3.5 - headUy * 2.5} stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
-              <line x1={start.cx + tx} y1={start.cy + ty} x2={start.cx + tx + headUy * 3.5 - headUx * 2.5} y2={start.cy + ty - headUx * 3.5 - headUy * 2.5} stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
+              <g>
+                <line x1={start.cx} y1={start.cy} x2={start.cx + tx} y2={start.cy + ty} stroke="#ef4444" strokeWidth="2.8" strokeLinecap="round" />
+                <line x1={start.cx + tx} y1={start.cy + ty} x2={start.cx + tx - headUy * 4.5 - headUx * 2.5} y2={start.cy + ty + headUx * 4.5 - headUy * 2.5} stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" />
+                <line x1={start.cx + tx} y1={start.cy + ty} x2={start.cx + tx + headUy * 4.5 - headUx * 2.5} y2={start.cy + ty - headUx * 4.5 - headUy * 2.5} stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" />
+              </g>
 
               {/* Snake Head Outline */}
               <circle cx={start.cx} cy={start.cy} r={bodyWidth * 0.8 + 1.5} fill="#1e293b" />
               {/* Snake Head Base */}
               <circle cx={start.cx} cy={start.cy} r={bodyWidth * 0.8} fill={baseColor} />
 
-              {/* Cartoon Eyes */}
-              <circle cx={start.cx - headUy * 5 - headUx * 1.5} cy={start.cy + headUx * 5 - headUy * 1.5} r={cellSize * 0.07} fill="white" stroke="#1e293b" strokeWidth="1" />
-              <circle cx={start.cx + headUy * 5 - headUx * 1.5} cy={start.cy - headUx * 5 - headUy * 1.5} r={cellSize * 0.07} fill="white" stroke="#1e293b" strokeWidth="1" />
-              <circle cx={start.cx - headUy * 4 - headUx * 2} cy={start.cy + headUx * 4 - headUy * 2} r={cellSize * 0.025} fill="black" />
-              <circle cx={start.cx + headUy * 4 - headUx * 2} cy={start.cy - headUx * 4 - headUy * 2} r={cellSize * 0.025} fill="black" />
+              {/* High-quality Cartoon Eyes */}
+              <circle cx={start.cx - headUy * 5.5 - headUx * 1.5} cy={start.cy + headUx * 5.5 - headUy * 1.5} r={cellSize * 0.08} fill="white" stroke="#1e293b" strokeWidth="1.2" />
+              <circle cx={start.cx + headUy * 5.5 - headUx * 1.5} cy={start.cy - headUx * 5.5 - headUy * 1.5} r={cellSize * 0.08} fill="white" stroke="#1e293b" strokeWidth="1.2" />
+              <circle cx={start.cx - headUy * 4.5 - headUx * 2} cy={start.cy + headUx * 4.5 - headUy * 2} r={cellSize * 0.03} fill="black" />
+              <circle cx={start.cx + headUy * 4.5 - headUx * 2} cy={start.cy - headUx * 4.5 - headUy * 2} r={cellSize * 0.03} fill="black" />
 
               {/* Tiny crown label for owned snakes */}
               {ownerPlayer && (
                 <text 
                   x={start.cx} 
-                  y={start.cy - (cellSize * 0.38)} 
+                  y={start.cy - (cellSize * 0.42)} 
                   fontSize={cellSize * 0.45 + "px"} 
                   textAnchor="middle" 
                   style={{ userSelect: "none", filter: "drop-shadow(0px 2px 4px rgba(0,0,0,0.5))" }}
@@ -611,6 +713,26 @@ export default function GameBoardComponent({ board, players }) {
         const offsetX = p.position > 0 ? (idx % 2 === 0 ? -1 : 1) * (cellSize * 0.15) : 0;
         const offsetY = p.position > 0 ? (idx < 2 ? -1 : 1) * (cellSize * 0.15) : 0;
         
+        // Dynamic transition speed depending on the activity type
+        let transitionStyle = "all 0.35s cubic-bezier(0.25, 1, 0.5, 1)"; // Continuous cell walking
+        if (p.isClimbing) {
+          transitionStyle = "all 0.9s cubic-bezier(0.45, 0, 0.55, 1)"; // Smooth slide up ladders
+        } else if (p.isSwallowed) {
+          transitionStyle = "all 1.0s cubic-bezier(0.36, 0.07, 0.19, 0.97)"; // Viscous swallow slide down snakes
+        }
+
+        // Dynamic keyframe animations for panic, swallow, climb, and walk
+        let animationStyle = "none";
+        if (p.isPanicking) {
+          animationStyle = "cookie-panic-shake 0.15s infinite linear";
+        } else if (p.isSwallowed) {
+          animationStyle = "cookie-snake-slide 1.0s ease-in-out forwards";
+        } else if (p.isClimbing) {
+          animationStyle = "cookie-ladder-climb 0.4s infinite ease-in-out";
+        } else if (p.isWalking) {
+          animationStyle = "cookie-walk 0.35s infinite ease-in-out";
+        }
+
         return (
           <div
             key={`player-${p.id}`}
@@ -620,7 +742,8 @@ export default function GameBoardComponent({ board, players }) {
               top: cy + offsetY - (cellSize * 0.48),
               width: cellSize * 0.8,
               height: cellSize * 0.9,
-              transition: "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              transition: transitionStyle,
+              animation: animationStyle,
               zIndex: 20 + idx,
               display: "flex",
               alignItems: "center",

@@ -2,8 +2,17 @@ export function generateBoard(playerSnakeHeads = [], numSnakes = 3, numLadders =
   const snakes = [];
   const ladders = [];
   const usedCells = new Set([1, 100]); // 1 and 100 cannot be start/end points
+  const snakeHeads = new Set(); // Track all snake heads to prevent sequences of three consecutive heads
 
   const getRandomCell = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+  // Helper to ensure we never have three consecutive snake heads (e.g. 75, 76, 77)
+  const causesSequenceOfThree = (h, existingHeads) => {
+    if (existingHeads.has(h - 1) && existingHeads.has(h - 2)) return true;
+    if (existingHeads.has(h - 1) && existingHeads.has(h + 1)) return true;
+    if (existingHeads.has(h + 1) && existingHeads.has(h + 2)) return true;
+    return false;
+  };
 
   // 1. Generate Player Owned Snakes first
   playerSnakeHeads.forEach(head => {
@@ -15,6 +24,7 @@ export function generateBoard(playerSnakeHeads = [], numSnakes = 3, numLadders =
         usedCells.add(head);
         usedCells.add(tail);
         snakes.push({ head, tail });
+        snakeHeads.add(head);
         break;
       }
       attempts++;
@@ -33,10 +43,11 @@ export function generateBoard(playerSnakeHeads = [], numSnakes = 3, numLadders =
     while (attempts < 100) {
       head = mustBeTopRow ? getRandomCell(91, 99) : getRandomCell(15, 99);
       tail = getRandomCell(2, head - 10);
-      if (!usedCells.has(head) && !usedCells.has(tail)) {
+      if (!usedCells.has(head) && !usedCells.has(tail) && !causesSequenceOfThree(head, snakeHeads)) {
         usedCells.add(head);
         usedCells.add(tail);
         snakes.push({ head, tail });
+        snakeHeads.add(head);
         break;
       }
       attempts++;
@@ -67,7 +78,7 @@ export function rollDice() {
   return Math.floor(Math.random() * 6) + 1;
 }
 
-export function calculateNewPosition(currentPos, diceValue, board, player) {
+export function calculateNewPosition(currentPos, diceValue, board, player, gameMode = "own-snake") {
   let newPos = currentPos;
   let message = `Rolled a ${diceValue}.`;
   let wasSafeSnake = false;
@@ -105,7 +116,7 @@ export function calculateNewPosition(currentPos, diceValue, board, player) {
     // Check snakes
     const snake = board.snakes.find(s => s.head === newPos);
     if (snake) {
-      if (newPos === player.ownSnakeNumber) {
+      if (gameMode !== "classic" && newPos === player.ownSnakeNumber) {
         wasSafeSnake = true;
         message += ` Landed on your OWN snake at ${snake.head}! Immune!`;
       } else {
