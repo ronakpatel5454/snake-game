@@ -158,15 +158,26 @@ export default function GameBoardComponent({ board, players, gameMode }) {
   const [boardSize, setBoardSize] = useState(500);
 
   useEffect(() => {
-    const handleResize = () => {
+    if (!containerRef.current) return;
+
+    const handleSize = () => {
       if (containerRef.current) {
         const width = containerRef.current.clientWidth;
-        setBoardSize(Math.min(width, 600)); // max 600px
+        if (width > 0) {
+          setBoardSize(Math.min(width, 600)); // max 600px
+        }
       }
     };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+
+    // Initial size check
+    handleSize();
+
+    const observer = new ResizeObserver(() => {
+      handleSize();
+    });
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
   }, []);
 
   const cellSize = boardSize / 10;
