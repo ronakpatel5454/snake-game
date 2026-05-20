@@ -1,4 +1,4 @@
-export function generateBoard(playerSnakeHeads = []) {
+export function generateBoard(playerSnakeHeads = [], numSnakes = 3, numLadders = 5) {
   const snakes = [];
   const ladders = [];
   const usedCells = new Set([1, 100]); // 1 and 100 cannot be start/end points
@@ -21,12 +21,17 @@ export function generateBoard(playerSnakeHeads = []) {
     }
   });
 
-  // 2. Generate 5 random snakes
-  for (let i = 0; i < 5; i++) {
+  // 2. Generate random snakes based on custom count
+  // We guarantee at least 1 or 2 snakes starting between 91 and 99
+  const topRowSnakesNeeded = Math.min(numSnakes, Math.floor(Math.random() * 2) + 1);
+
+  for (let i = 0; i < numSnakes; i++) {
     let head = 0, tail = 0;
     let attempts = 0;
+    const mustBeTopRow = i < topRowSnakesNeeded;
+
     while (attempts < 100) {
-      head = getRandomCell(15, 99);
+      head = mustBeTopRow ? getRandomCell(91, 99) : getRandomCell(15, 99);
       tail = getRandomCell(2, head - 10);
       if (!usedCells.has(head) && !usedCells.has(tail)) {
         usedCells.add(head);
@@ -38,8 +43,8 @@ export function generateBoard(playerSnakeHeads = []) {
     }
   }
 
-  // 3. Generate 7 ladders
-  for (let i = 0; i < 7; i++) {
+  // 3. Generate ladders based on custom count
+  for (let i = 0; i < numLadders; i++) {
     let bottom = 0, top = 0;
     let attempts = 0;
     while (attempts < 100) {
