@@ -2,13 +2,14 @@ import { useState } from "react";
 
 const COLORS = ["#ef4444", "#3b82f6", "#a855f7", "#ec4899", "#f97316", "#06b6d4"];
 
-export default function LobbyComponent({ onStart, onBack, gameMode }) {
+export default function LobbyComponent({ onStart, onBack, gameMode, initialTheme }) {
   const [numPlayers, setNumPlayers] = useState(2);
   const [isSinglePlayer, setIsSinglePlayer] = useState(true);
   const [playerConfigs, setPlayerConfigs] = useState([
     { name: "Player 1", ownSnake: 54 },
     { name: "Player 2", ownSnake: 60 },
   ]);
+  const [selectedTheme, setSelectedTheme] = useState(initialTheme || "classic");
 
   // Default parameters as currently used
   const [numSnakes, setNumSnakes] = useState(3);
@@ -118,7 +119,7 @@ export default function LobbyComponent({ onStart, onBack, gameMode }) {
       lastRoll: 1
     }));
 
-    onStart(finalPlayers, finalSnakes, finalLadders);
+    onStart(finalPlayers, finalSnakes, finalLadders, selectedTheme);
   };
 
   return (
@@ -271,6 +272,70 @@ export default function LobbyComponent({ onStart, onBack, gameMode }) {
           </div>
         </div>
       )}
+
+      {/* Board Theme Selection Grid */}
+      <div style={{ marginBottom: "2rem", marginTop: "1rem" }}>
+        <label style={{ display: "block", marginBottom: "0.75rem", color: "var(--text-muted)", fontWeight: "bold", fontSize: "0.95rem" }}>
+          🌍 Select Board Theme
+        </label>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gap: "1rem"
+        }}>
+          {[
+            {
+              id: "classic",
+              name: "Classic Toys 🎲",
+              desc: "Nostalgic colorful checkers, plastic blue/red ladders, and cartoon green snakes.",
+              color: "#ef4444"
+            },
+            {
+              id: "neon",
+              name: "Retro Arcade 👾",
+              desc: "Deep grid space, neon cyan/magenta laser paths, matrix wireframe worms.",
+              color: "#6366f1"
+            },
+            {
+              id: "forest",
+              name: "Jungle Expedition 🌿",
+              desc: "Woodland green and brown terrain, natural log ladders, leafy vine snakes.",
+              color: "#10b981"
+            },
+            {
+              id: "space",
+              name: "Cosmic Odyssey 🚀",
+              desc: "Starry starry nebula, gravity wormhole channels, space plasma alien worms.",
+              color: "#a855f7"
+            }
+          ].map(t => {
+            const isSelected = selectedTheme === t.id;
+            return (
+              <div
+                key={t.id}
+                onClick={() => setSelectedTheme(t.id)}
+                style={{
+                  padding: "1rem",
+                  borderRadius: "12px",
+                  background: isSelected ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.02)",
+                  border: isSelected ? `2px solid ${t.color}` : "1.5px solid rgba(255,255,255,0.06)",
+                  boxShadow: isSelected ? `0 0 15px ${t.color}33` : "none",
+                  cursor: "pointer",
+                  transition: "all 0.25s ease",
+                  transform: isSelected ? "scale(1.02)" : "scale(1)"
+                }}
+              >
+                <div style={{ fontWeight: "bold", fontSize: "1rem", color: isSelected ? "white" : "var(--text-main)", marginBottom: "0.25rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span>{t.name}</span>
+                </div>
+                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", lineHeight: "1.3" }}>
+                  {t.desc}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <button className="btn" style={{ width: "100%", padding: "1rem", fontSize: "1.2rem" }} onClick={validateAndStart}>
         Start Game

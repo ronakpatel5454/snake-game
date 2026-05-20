@@ -3,7 +3,7 @@ import GameBoardComponent from "./components/GameBoardComponent";
 import LobbyComponent from "./components/LobbyComponent";
 import { generateBoard, rollDice, calculateNewPosition } from "./lib/gameLogic";
 
-function Premium3DDice({ value, color, isRolling }) {
+function Premium3DDice({ value, color, isRolling, theme }) {
   const val = value || 1;
 
   // 3D rotations to face each rolled side
@@ -40,6 +40,28 @@ function Premium3DDice({ value, color, isRolling }) {
       ];
     }
 
+    const isNeon = theme === "neon";
+    const isForest = theme === "forest";
+    const isSpace = theme === "space";
+
+    let dotBg = "white";
+    let dotShadow = "0 1px 2px rgba(0,0,0,0.4), inset 0 -1px 1px rgba(0,0,0,0.2)";
+    let clipPath = undefined;
+    let dotSize = "8px";
+
+    if (isNeon) {
+      dotBg = color;
+      dotShadow = `0 0 8px ${color}`;
+    } else if (isForest) {
+      dotBg = "#451a03";
+      dotShadow = "inset 0 1px 1px rgba(0,0,0,0.6)";
+    } else if (isSpace) {
+      dotBg = "#fef08a"; // gold stardust
+      dotShadow = "0 0 6px #fef08a";
+      clipPath = "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)";
+      dotSize = "10px";
+    }
+
     return (
       <div style={{
         display: "grid",
@@ -55,11 +77,12 @@ function Premium3DDice({ value, color, isRolling }) {
             style={{
               gridRow: d.row,
               gridColumn: d.col,
-              width: "8px",
-              height: "8px",
-              background: "white",
-              borderRadius: "50%",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.4), inset 0 -1px 1px rgba(0,0,0,0.2)",
+              width: dotSize,
+              height: dotSize,
+              background: dotBg,
+              borderRadius: isSpace ? undefined : "50%",
+              boxShadow: dotShadow,
+              clipPath: clipPath,
               alignSelf: "center",
               justifySelf: "center"
             }}
@@ -68,6 +91,24 @@ function Premium3DDice({ value, color, isRolling }) {
       </div>
     );
   };
+
+  let faceBg = color;
+  let faceBorder = "1.5px solid rgba(15, 23, 42, 0.85)";
+  let faceShadow = "inset 0 2px 3px rgba(255,255,255,0.4), inset 0 -2px 3px rgba(0,0,0,0.35), 0 3px 5px rgba(0,0,0,0.25)";
+
+  if (theme === "neon") {
+    faceBg = "#090d16";
+    faceBorder = `2.5px solid ${color}`;
+    faceShadow = `0 0 10px ${color}, inset 0 0 8px ${color}88`;
+  } else if (theme === "forest") {
+    faceBg = "linear-gradient(135deg, #d97706 0%, #b45309 100%)";
+    faceBorder = "1.5px solid #78350f";
+    faceShadow = "inset 0 2px 4px rgba(251, 191, 36, 0.2), inset 0 -2px 4px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3)";
+  } else if (theme === "space") {
+    faceBg = `radial-gradient(circle, ${color}cc 0%, #1e1b4b ee 100%)`;
+    faceBorder = "1.5px solid rgba(255, 255, 255, 0.6)";
+    faceShadow = "0 0 12px rgba(255, 255, 255, 0.2), inset 0 2px 4px rgba(255,255,255,0.3), inset 0 -2px 4px rgba(0,0,0,0.4)";
+  }
 
   return (
     <div style={{
@@ -99,8 +140,6 @@ function Premium3DDice({ value, color, isRolling }) {
           width: 50px;
           height: 50px;
           border-radius: 8px;
-          border: 1.5px solid rgba(15, 23, 42, 0.85);
-          box-shadow: inset 0 2px 3px rgba(255,255,255,0.4), inset 0 -2px 3px rgba(0,0,0,0.35), 0 3px 5px rgba(0,0,0,0.25);
           backface-visibility: hidden;
         }
       `}</style>
@@ -112,27 +151,27 @@ function Premium3DDice({ value, color, isRolling }) {
         }}
       >
         {/* Face 1 (Front) */}
-        <div className="dice-3d-face" style={{ background: color, transform: "rotateY(0deg) translateZ(25px)" }}>
+        <div className="dice-3d-face" style={{ background: faceBg, border: faceBorder, boxShadow: faceShadow, transform: "rotateY(0deg) translateZ(25px)" }}>
           {renderFaceDots(1)}
         </div>
         {/* Face 6 (Back) */}
-        <div className="dice-3d-face" style={{ background: color, transform: "rotateY(180deg) translateZ(25px)" }}>
+        <div className="dice-3d-face" style={{ background: faceBg, border: faceBorder, boxShadow: faceShadow, transform: "rotateY(180deg) translateZ(25px)" }}>
           {renderFaceDots(6)}
         </div>
         {/* Face 4 (Left) */}
-        <div className="dice-3d-face" style={{ background: color, transform: "rotateY(-90deg) translateZ(25px)" }}>
+        <div className="dice-3d-face" style={{ background: faceBg, border: faceBorder, boxShadow: faceShadow, transform: "rotateY(-90deg) translateZ(25px)" }}>
           {renderFaceDots(4)}
         </div>
         {/* Face 3 (Right) */}
-        <div className="dice-3d-face" style={{ background: color, transform: "rotateY(90deg) translateZ(25px)" }}>
+        <div className="dice-3d-face" style={{ background: faceBg, border: faceBorder, boxShadow: faceShadow, transform: "rotateY(90deg) translateZ(25px)" }}>
           {renderFaceDots(3)}
         </div>
         {/* Face 2 (Top) */}
-        <div className="dice-3d-face" style={{ background: color, transform: "rotateX(90deg) translateZ(25px)" }}>
+        <div className="dice-3d-face" style={{ background: faceBg, border: faceBorder, boxShadow: faceShadow, transform: "rotateX(90deg) translateZ(25px)" }}>
           {renderFaceDots(2)}
         </div>
         {/* Face 5 (Bottom) */}
-        <div className="dice-3d-face" style={{ background: color, transform: "rotateX(-90deg) translateZ(25px)" }}>
+        <div className="dice-3d-face" style={{ background: faceBg, border: faceBorder, boxShadow: faceShadow, transform: "rotateX(-90deg) translateZ(25px)" }}>
           {renderFaceDots(5)}
         </div>
       </div>
@@ -140,7 +179,7 @@ function Premium3DDice({ value, color, isRolling }) {
   );
 }
 
-function PlayerCornerCard({ player, isActive, isRolling, isDiceRolling, onRoll }) {
+function PlayerCornerCard({ player, isActive, isRolling, isDiceRolling, onRoll, theme }) {
   if (!player) return null;
 
   return (
@@ -193,6 +232,7 @@ function PlayerCornerCard({ player, isActive, isRolling, isDiceRolling, onRoll }
           value={player.lastRoll || 1}
           color={player.color}
           isRolling={isActive && isDiceRolling}
+          theme={theme}
         />
       </div>
 
@@ -369,6 +409,12 @@ export default function App() {
       return saved ? JSON.parse(saved) : 5;
     } catch { return 5; }
   });
+  const [activeTheme, setActiveTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_activeTheme");
+      return saved ? JSON.parse(saved) : "classic";
+    } catch { return "classic"; }
+  });
 
   // Keep refs up-to-date to completely prevent stale closures in async timeouts
   const playersRef = useRef(players);
@@ -394,16 +440,17 @@ export default function App() {
       localStorage.setItem("snake_game_gameMode", JSON.stringify(gameMode));
       localStorage.setItem("snake_game_setupSnakesCount", JSON.stringify(setupSnakesCount));
       localStorage.setItem("snake_game_setupLaddersCount", JSON.stringify(setupLaddersCount));
+      localStorage.setItem("snake_game_activeTheme", JSON.stringify(activeTheme));
     } catch (e) {
       console.error("Failed to save game state to localStorage", e);
     }
-  }, [inGame, players, board, currentTurnIndex, logs, diceValue, winner, gameMode, setupSnakesCount, setupLaddersCount]);
+  }, [inGame, players, board, currentTurnIndex, logs, diceValue, winner, gameMode, setupSnakesCount, setupLaddersCount, activeTheme]);
 
   const addLog = (msg) => {
     setLogs(prev => [msg, ...prev].slice(0, 5));
   };
 
-  const startGame = (setupPlayers, numSnakes = 3, numLadders = 5) => {
+  const startGame = (setupPlayers, numSnakes = 3, numLadders = 5, selectedTheme = "classic") => {
     setSetupSnakesCount(numSnakes);
     setSetupLaddersCount(numLadders);
     setPlayers(setupPlayers);
@@ -413,6 +460,7 @@ export default function App() {
     setCurrentTurnIndex(0);
     setLogs(["Game started!"]);
     setWinner(null);
+    setActiveTheme(selectedTheme);
   };
 
   const restartSameGame = () => {
@@ -819,7 +867,7 @@ export default function App() {
         gameMode === null ? (
           <ModeSelectionComponent onSelectMode={(mode) => setGameMode(mode)} />
         ) : (
-          <LobbyComponent onStart={startGame} onBack={() => setGameMode(null)} gameMode={gameMode} />
+          <LobbyComponent onStart={startGame} onBack={() => setGameMode(null)} gameMode={gameMode} initialTheme={activeTheme} />
         )
       ) : (
         <div style={{ display: "flex", gap: "2rem", width: "100%", maxWidth: "1250px", flexWrap: "wrap", justifyContent: "center" }}>
@@ -839,6 +887,7 @@ export default function App() {
                   isRolling={isRolling}
                   isDiceRolling={isDiceRolling}
                   onRoll={handleRoll}
+                  theme={activeTheme}
                 />
                 <PlayerCornerCard
                   player={players[2]}
@@ -846,6 +895,7 @@ export default function App() {
                   isRolling={isRolling}
                   isDiceRolling={isDiceRolling}
                   onRoll={handleRoll}
+                  theme={activeTheme}
                 />
               </div>
 
@@ -883,7 +933,7 @@ export default function App() {
                   </div>
                 )}
 
-                {board && <GameBoardComponent board={board} players={players} gameMode={gameMode} />}
+                {board && <GameBoardComponent board={board} players={players} gameMode={gameMode} theme={activeTheme} />}
 
                 {/* Mobile Active Player Panel & Controls (below board) */}
                 {board && (
@@ -910,9 +960,9 @@ export default function App() {
                           {players[currentTurnIndex]?.name} {players[currentTurnIndex]?.isBot && "🤖"}
                         </div>
                         {players[currentTurnIndex]?.isBot ? (
-                          <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", animation: "pulse 1.5s infinite" }}>🤖 Thinking...</div>
+                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", animation: "pulse 1.5s infinite" }}>🤖 Thinking...</div>
                         ) : (
-                          <div style={{ fontSize: "0.7rem", fontWeight: "bold", color: players[currentTurnIndex]?.color, animation: "pulse 1.5s infinite" }}>🎯 Tap Die to Roll!</div>
+                          <div style={{ fontSize: "0.75rem", fontWeight: "bold", color: players[currentTurnIndex]?.color, animation: "pulse 1.5s infinite" }}>🎯 Tap Die to Roll!</div>
                         )}
                       </div>
 
@@ -933,6 +983,7 @@ export default function App() {
                           value={players[currentTurnIndex]?.lastRoll || 1}
                           color={players[currentTurnIndex]?.color}
                           isRolling={isDiceRolling}
+                          theme={activeTheme}
                         />
                       </div>
                     </div>
@@ -978,6 +1029,7 @@ export default function App() {
                   isRolling={isRolling}
                   isDiceRolling={isDiceRolling}
                   onRoll={handleRoll}
+                  theme={activeTheme}
                 />
                 <PlayerCornerCard
                   player={players[3]}
@@ -985,6 +1037,7 @@ export default function App() {
                   isRolling={isRolling}
                   isDiceRolling={isDiceRolling}
                   onRoll={handleRoll}
+                  theme={activeTheme}
                 />
               </div>
 
