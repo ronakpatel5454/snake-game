@@ -462,7 +462,8 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
 
     const handleSize = () => {
       if (containerRef.current) {
-        const width = containerRef.current.clientWidth;
+        const parent = containerRef.current.parentElement;
+        const width = parent ? parent.clientWidth : containerRef.current.clientWidth;
         if (width > 0) {
           setBoardSize(Math.min(width, 600)); // max 600px
         }
@@ -476,7 +477,12 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
       handleSize();
     });
 
-    observer.observe(containerRef.current);
+    const parent = containerRef.current.parentElement;
+    if (parent) {
+      observer.observe(parent);
+    } else {
+      observer.observe(containerRef.current);
+    }
     return () => observer.disconnect();
   }, []);
 

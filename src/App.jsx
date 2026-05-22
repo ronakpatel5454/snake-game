@@ -2,6 +2,16 @@ import { useState, useEffect, useRef } from "react";
 import GameBoardComponent from "./components/GameBoardComponent";
 import LobbyComponent from "./components/LobbyComponent";
 import { generateBoard, rollDice, calculateNewPosition } from "./lib/gameLogic";
+import { supabase } from "./lib/supabase";
+
+const getClientPlayerId = () => {
+  let id = localStorage.getItem("snake_game_client_player_id");
+  if (!id) {
+    id = "player_" + Math.random().toString(36).substring(2, 11);
+    localStorage.setItem("snake_game_client_player_id", id);
+  }
+  return id;
+};
 
 function Premium3DDice({ value, color, isRolling, theme }) {
   const val = value || 1;
@@ -416,9 +426,35 @@ export default function App() {
     } catch { return "classic"; }
   });
 
+  // --- Online Multiplayer States ---
+  const [isOnline, setIsOnline] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_isOnline");
+      return saved ? JSON.parse(saved) : false;
+    } catch { return false; }
+  });
+  const [gameCode, setGameCode] = useState(() => {
+    return localStorage.getItem("snake_game_gameCode") || "";
+  });
+  const [myPlayerId] = useState(getClientPlayerId);
+  const [isHost, setIsHost] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_isHost");
+      return saved ? JSON.parse(saved) : false;
+    } catch { return false; }
+  });
+  const [joinedPlayers, setJoinedPlayers] = useState([]);
+  const [isConnecting, setIsConnecting] = useState(false);
+
   // Keep refs up-to-date to completely prevent stale closures in async timeouts
   const playersRef = useRef(players);
   const boardRef = useRef(board);
+  const broadcastChannelRef = useRef(null);
+  const isRollingRef = useRef(isRolling);
+  const isDiceRollingRef = useRef(isDiceRolling);
+  const rollingTimeoutRef = useRef(null);
+  const pendingTurnIndexRef = useRef(null);
+  const consecutiveTimeoutsRef = useRef({});
 
   useEffect(() => {
     playersRef.current = players;
@@ -429,6 +465,44 @@ export default function App() {
   }, [board]);
 
   useEffect(() => {
+    isRollingRef.current = isRolling;
+  }, [isRolling]);
+
+  useEffect(() => {
+    isDiceRollingRef.current = isDiceRolling;
+  }, [isDiceRolling]);
+
+  // Sync online lobby states to localStorage to support page refresh/recovery
+  useEffect(() => {
+    try {
+      localStorage.setItem("snake_game_isOnline", JSON.stringify(isOnline));
+      localStorage.setItem("snake_game_gameCode", gameCode);
+      localStorage.setItem("snake_game_isHost", JSON.stringify(isHost));
+    } catch (e) {
+      console.error("Failed to save online state to localStorage", e);
+    }
+  }, [isOnline, gameCode, isHost]);
+
+  // Apply pending turn index once rolling / walking animations finish
+  useEffect(() => {
+    if (!isRolling && !isDiceRolling && pendingTurnIndexRef.current !== null) {
+      setCurrentTurnIndex(pendingTurnIndexRef.current);
+      pendingTurnIndexRef.current = null;
+    }
+  }, [isRolling, isDiceRolling]);
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (rollingTimeoutRef.current) {
+        clearTimeout(rollingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Persist local games only
+  useEffect(() => {
+    if (isOnline) return;
     try {
       localStorage.setItem("snake_game_inGame", JSON.stringify(inGame));
       localStorage.setItem("snake_game_players", JSON.stringify(players));
@@ -444,12 +518,462 @@ export default function App() {
     } catch (e) {
       console.error("Failed to save game state to localStorage", e);
     }
-  }, [inGame, players, board, currentTurnIndex, logs, diceValue, winner, gameMode, setupSnakesCount, setupLaddersCount, activeTheme]);
+  }, [inGame, players, board, currentTurnIndex, logs, diceValue, winner, gameMode, setupSnakesCount, setupLaddersCount, activeTheme, isOnline]);
 
   const addLog = (msg) => {
     setLogs(prev => [msg, ...prev].slice(0, 5));
   };
 
+  // --- Online Database Handlers ---
+  const generateRoomCode = () => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let result = "";
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+
+  const handleCreateOnlineRoom = async ({ hostName, hostColor, hostSnake, theme, customElements, snakesCount, laddersCount }) => {
+    setIsConnecting(true);
+    try {
+      const code = generateRoomCode();
+      const { data: game, error: gameError } = await supabase
+        .from("games")
+        .insert({
+          code,
+          status: "waiting",
+          theme,
+          game_mode: gameMode || "classic",
+          setup_snakes_count: snakesCount,
+          setup_ladders_count: laddersCount
+        })
+        .select()
+        .single();
+
+      if (gameError) throw gameError;
+
+      const { error: playerError } = await supabase
+        .from("game_players")
+        .insert({
+          game_id: game.id,
+          client_player_id: myPlayerId,
+          name: hostName,
+          color: hostColor,
+          own_snake_number: hostSnake,
+          is_host: true,
+          is_bot: false
+        });
+
+      if (playerError) throw playerError;
+
+      setGameCode(code);
+      setIsHost(true);
+      setIsOnline(true);
+      
+      const newUrl = `${window.location.origin}${window.location.pathname}?code=${code}`;
+      window.history.pushState({ path: newUrl }, "", newUrl);
+    } catch (error) {
+      console.error("Error hosting game:", error);
+      alert("Failed to host room. Please try again.");
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleJoinOnlineRoom = async ({ code, playerName, playerColor, playerSnake }) => {
+    setIsConnecting(true);
+    try {
+      const cleanedCode = code.trim().toUpperCase();
+      const { data: game, error: gameError } = await supabase
+        .from("games")
+        .select("*")
+        .eq("code", cleanedCode)
+        .single();
+
+      if (gameError || !game) {
+        alert("Room not found. Check the code.");
+        setIsConnecting(false);
+        return;
+      }
+
+      if (game.status !== "waiting") {
+        alert("This game has already started or finished.");
+        setIsConnecting(false);
+        return;
+      }
+
+      const { data: existingPlayers } = await supabase
+        .from("game_players")
+        .select("*")
+        .eq("game_id", game.id);
+
+      if (existingPlayers && existingPlayers.length >= 4) {
+        alert("Room is full (max 4 players).");
+        setIsConnecting(false);
+        return;
+      }
+
+      const alreadyInRoom = existingPlayers.find(p => p.client_player_id === myPlayerId);
+      if (alreadyInRoom) {
+        await supabase
+          .from("game_players")
+          .update({
+            name: playerName,
+            color: playerColor,
+            own_snake_number: playerSnake
+          })
+          .eq("id", alreadyInRoom.id);
+      } else {
+        const { error: playerError } = await supabase
+          .from("game_players")
+          .insert({
+            game_id: game.id,
+            client_player_id: myPlayerId,
+            name: playerName,
+            color: playerColor,
+            own_snake_number: playerSnake,
+            is_host: false,
+            is_bot: false
+          });
+        if (playerError) throw playerError;
+      }
+
+      setGameCode(cleanedCode);
+      setIsHost(false);
+      setIsOnline(true);
+      setGameMode(game.game_mode);
+      setActiveTheme(game.theme);
+
+      const newUrl = `${window.location.origin}${window.location.pathname}?code=${cleanedCode}`;
+      window.history.pushState({ path: newUrl }, "", newUrl);
+    } catch (error) {
+      console.error("Error joining game:", error);
+      alert("Failed to join room.");
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleLeaveOnlineRoom = async () => {
+    try {
+      if (gameCode) {
+        const { data: game } = await supabase
+          .from("games")
+          .select("id, status")
+          .eq("code", gameCode)
+          .maybeSingle();
+
+        if (game) {
+          if (isHost || game.status === "finished") {
+            await supabase
+              .from("games")
+              .delete()
+              .eq("id", game.id);
+          } else {
+            await supabase
+              .from("game_players")
+              .delete()
+              .eq("game_id", game.id)
+              .eq("client_player_id", myPlayerId);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error leaving room:", err);
+    } finally {
+      setGameCode("");
+      setIsHost(false);
+      setIsOnline(false);
+      setJoinedPlayers([]);
+      setInGame(false);
+      setBoard(null);
+      setWinner(null);
+      try {
+        localStorage.removeItem("snake_game_isOnline");
+        localStorage.removeItem("snake_game_gameCode");
+        localStorage.removeItem("snake_game_isHost");
+      } catch (e) {
+        console.error("Failed to clean up online localStorage:", e);
+      }
+      const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+      window.history.pushState({ path: cleanUrl }, "", cleanUrl);
+    }
+  };
+
+  const exitGame = () => {
+    if (isOnline) {
+      handleLeaveOnlineRoom();
+    } else {
+      setInGame(false);
+      setPlayers([]);
+      setBoard(null);
+      setWinner(null);
+      setLogs([]);
+      setDiceValue(null);
+      setGameMode(null);
+    }
+  };
+
+  // --- Realtime Lobby and State Sync Effects ---
+  useEffect(() => {
+    if (!isOnline || !gameCode) return;
+
+    let gamesChannel;
+    let playersChannel;
+
+    const setupSync = async () => {
+      const { data: game, error: gameError } = await supabase
+        .from("games")
+        .select("*")
+        .eq("code", gameCode)
+        .single();
+
+      if (gameError || !game) {
+        handleLeaveOnlineRoom();
+        return;
+      }
+
+      setGameMode(game.game_mode);
+      setActiveTheme(game.theme);
+      setSetupSnakesCount(game.setup_snakes_count);
+      setSetupLaddersCount(game.setup_ladders_count);
+
+      const fetchPlayers = async () => {
+        const { data: playersList } = await supabase
+          .from("game_players")
+          .select("*")
+          .eq("game_id", game.id)
+          .order("joined_at", { ascending: true });
+        
+        if (playersList) {
+          const mapped = playersList.map(p => ({
+            id: p.client_player_id,
+            name: p.name,
+            position: p.position || 0,
+            ownSnakeNumber: p.own_snake_number,
+            color: p.color,
+            isBot: p.is_bot,
+            isHost: p.is_host,
+            unlockAttempts: p.unlock_attempts || 0,
+            lastRoll: p.last_roll || 1
+          }));
+          setJoinedPlayers(mapped);
+
+          // If the player is in an online game and not in the players list, they have been removed!
+          const stillInRoom = mapped.some(p => p.id === myPlayerId);
+          if (!stillInRoom && isOnline) {
+            handleLeaveOnlineRoom();
+            alert("You have been removed from the game due to inactivity (2 consecutive timeouts).");
+            return;
+          }
+          
+          // Protect player positions during active animations to avoid visual snaps and jumps!
+          setPlayers(prev => {
+            if (prev && prev.length > 0 && (isRollingRef.current || isDiceRollingRef.current)) {
+              return mapped.map(mItem => {
+                const existing = prev.find(p => p.id === mItem.id);
+                return existing ? { ...mItem, position: existing.position } : mItem;
+              });
+            }
+            return mapped;
+          });
+        }
+      };
+      
+      await fetchPlayers();
+
+      if (game.status === "playing" || game.status === "finished") {
+        if (game.board) setBoard(game.board);
+        setCurrentTurnIndex(game.current_turn_index || 0);
+        if (game.logs) setLogs(game.logs);
+        if (game.dice_value) setDiceValue(game.dice_value);
+        setInGame(true);
+
+        if (game.status === "finished" && game.winner_id) {
+          const winPlayer = playersRef.current.find(p => p.id === game.winner_id);
+          if (winPlayer) setWinner(winPlayer);
+        }
+      }
+
+      gamesChannel = supabase
+        .channel(`room-metadata-${gameCode}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "games" },
+          async (payload) => {
+            if (payload.eventType === "DELETE") {
+              if (payload.old && payload.old.id === game.id) {
+                handleLeaveOnlineRoom();
+                alert("The game session has been completed or closed by the host.");
+              }
+              return;
+            }
+
+            const newRoomState = payload.new;
+            if (!newRoomState || newRoomState.code !== gameCode) return;
+
+            setActiveTheme(newRoomState.theme);
+            setSetupSnakesCount(newRoomState.setup_snakes_count);
+            setSetupLaddersCount(newRoomState.setup_ladders_count);
+
+            if (newRoomState.status === "playing" && newRoomState.board) {
+              setBoard(newRoomState.board);
+              
+              // Protect active turn index from shifting during receiver animation
+              if (isRollingRef.current || isDiceRollingRef.current) {
+                pendingTurnIndexRef.current = newRoomState.current_turn_index || 0;
+              } else {
+                setCurrentTurnIndex(newRoomState.current_turn_index || 0);
+              }
+
+              if (newRoomState.logs) setLogs(newRoomState.logs);
+              if (newRoomState.dice_value) setDiceValue(newRoomState.dice_value);
+              setInGame(true);
+            }
+
+            if (newRoomState.status === "finished" && newRoomState.winner_id) {
+              const winPlayer = playersRef.current.find(p => p.id === newRoomState.winner_id);
+              if (winPlayer) setWinner(winPlayer);
+            } else if (newRoomState.status === "playing") {
+              setWinner(null);
+            }
+
+            if (newRoomState.status === "waiting" && inGame) {
+              setInGame(false);
+              setBoard(null);
+              setWinner(null);
+            }
+          }
+        )
+        .subscribe();
+
+      playersChannel = supabase
+        .channel(`room-players-${gameCode}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "game_players" },
+          (payload) => {
+            const changedRow = payload.new || payload.old;
+            if (changedRow && changedRow.game_id === game.id) {
+              fetchPlayers();
+            }
+          }
+        )
+        .subscribe();
+    };
+
+    setupSync();
+
+    return () => {
+      if (gamesChannel) supabase.removeChannel(gamesChannel);
+      if (playersChannel) supabase.removeChannel(playersChannel);
+    };
+  }, [isOnline, gameCode]);
+
+  // --- Realtime Broadcast Channel Effect ---
+  useEffect(() => {
+    if (!isOnline || !gameCode) return;
+
+    const channel = supabase.channel(`gameplay-broadcast-${gameCode}`);
+
+    channel
+      .on("broadcast", { event: "dice-rolling" }, ({ payload }) => {
+        if (payload.playerId !== myPlayerId) {
+          setIsDiceRolling(true);
+          setIsRolling(true);
+
+          // Robust safety fallback: Clear existing timeout and set a new one
+          if (rollingTimeoutRef.current) clearTimeout(rollingTimeoutRef.current);
+          rollingTimeoutRef.current = setTimeout(() => {
+            console.warn("Safety timeout triggered: Rolling took too long or animation event was lost.");
+            setIsDiceRolling(false);
+            setIsRolling(false);
+          }, 8000); // 8 seconds fallback
+        }
+      })
+      .on("broadcast", { event: "turn-animation" }, async ({ payload }) => {
+        if (payload.playerId !== myPlayerId) {
+          executeTurnAnimationOnly(payload);
+        }
+        if (isHost) {
+          handleTimeoutTracking(payload.playerId, payload.isAutoRoll);
+        }
+      })
+      .subscribe();
+
+    broadcastChannelRef.current = channel;
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [isOnline, gameCode, myPlayerId, isHost]);
+
+  // --- Synced Walk / Slide Turn Animation ---
+  const executeTurnAnimationOnly = async ({ playerId, roll, startPos, targetPos, boardElements }) => {
+    if (rollingTimeoutRef.current) {
+      clearTimeout(rollingTimeoutRef.current);
+      rollingTimeoutRef.current = null;
+    }
+
+    // Engage locks immediately when animation payload is received
+    setIsRolling(true);
+    setIsDiceRolling(true);
+
+    try {
+      setDiceValue(roll);
+      setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, lastRoll: roll } : p));
+      
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      setIsDiceRolling(false);
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      let currentPos = startPos;
+      if (currentPos === 0) {
+        if (roll === 6) {
+          setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: 1, unlockAttempts: 0, lastRoll: roll } : p));
+          await new Promise(resolve => setTimeout(resolve, 600));
+          currentPos = 1;
+        } else {
+          setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, unlockAttempts: (p.unlockAttempts || 0) + 1, lastRoll: roll } : p));
+          await new Promise(resolve => setTimeout(resolve, 600));
+        }
+      } else {
+        if (startPos + roll <= 100) {
+          for (let step = startPos + 1; step <= startPos + roll; step++) {
+            setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
+            await new Promise(resolve => setTimeout(resolve, 350));
+          }
+          setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isWalking: false } : p));
+          currentPos = startPos + roll;
+          await new Promise(resolve => setTimeout(resolve, 400));
+        }
+      }
+
+      if (boardElements && boardElements.type === "ladder") {
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isClimbing: true } : p));
+        await new Promise(resolve => setTimeout(resolve, 50));
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: boardElements.top } : p));
+        await new Promise(resolve => setTimeout(resolve, 900));
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isClimbing: false } : p));
+      } else if (boardElements && boardElements.type === "snake") {
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isPanicking: true } : p));
+        await new Promise(resolve => setTimeout(resolve, 750));
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isPanicking: false, isSwallowed: true } : p));
+        await new Promise(resolve => setTimeout(resolve, 50));
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: boardElements.tail } : p));
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isSwallowed: false } : p));
+      }
+    } catch (err) {
+      console.error("Error in executeTurnAnimationOnly:", err);
+    } finally {
+      setIsRolling(false);
+      setIsDiceRolling(false);
+    }
+  };
+
+  // --- Game Control Actions ---
   const startGame = (setupPlayers, numSnakes = 3, numLadders = 5, selectedTheme = "classic") => {
     setSetupSnakesCount(numSnakes);
     setSetupLaddersCount(numLadders);
@@ -463,7 +987,98 @@ export default function App() {
     setActiveTheme(selectedTheme);
   };
 
-  const restartSameGame = () => {
+  const handleStartOnlineGame = async (finalSnakes, finalLadders, selectedTheme) => {
+    try {
+      const { data: game } = await supabase
+        .from("games")
+        .select("id")
+        .eq("code", gameCode)
+        .single();
+
+      if (!game) return;
+
+      const playerSnakeHeads = gameMode === "classic" ? [] : joinedPlayers.map(p => p.ownSnakeNumber);
+      const generated = generateBoard(playerSnakeHeads, finalSnakes, finalLadders);
+
+      const resetPromises = joinedPlayers.map(p => 
+        supabase
+          .from("game_players")
+          .update({
+            position: 0,
+            unlock_attempts: 0,
+            last_roll: 1
+          })
+          .eq("game_id", game.id)
+          .eq("client_player_id", p.id)
+      );
+      await Promise.all(resetPromises);
+
+      await supabase
+        .from("games")
+        .update({
+          status: "playing",
+          board: generated,
+          theme: selectedTheme,
+          setup_snakes_count: finalSnakes,
+          setup_ladders_count: finalLadders,
+          current_turn_index: 0,
+          dice_value: null,
+          winner_id: null,
+          logs: ["Game started! Let the race begin! 🚀"]
+        })
+        .eq("id", game.id);
+        
+    } catch (err) {
+      console.error("Error starting online game:", err);
+      alert("Failed to start online game.");
+    }
+  };
+
+  const restartSameGame = async () => {
+    if (isOnline) {
+      if (!isHost) return;
+      try {
+        const { data: game } = await supabase
+          .from("games")
+          .select("id")
+          .eq("code", gameCode)
+          .single();
+
+        if (!game) return;
+
+        const playerSnakeHeads = gameMode === "classic" ? [] : players.map(p => p.ownSnakeNumber);
+        const generated = generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount);
+
+        const resetPromises = players.map(p => 
+          supabase
+            .from("game_players")
+            .update({
+              position: 0,
+              unlock_attempts: 0,
+              last_roll: 1
+            })
+            .eq("game_id", game.id)
+            .eq("client_player_id", p.id)
+        );
+        await Promise.all(resetPromises);
+
+        await supabase
+          .from("games")
+          .update({
+            status: "playing",
+            board: generated,
+            current_turn_index: 0,
+            dice_value: null,
+            winner_id: null,
+            logs: ["Match restarted! Go, go, go! 🚀"]
+          })
+          .eq("id", game.id);
+      } catch (err) {
+        console.error("Error restarting online game:", err);
+      }
+      return;
+    }
+
     const resetPlayers = players.map(p => ({
       ...p,
       position: 0,
@@ -484,20 +1099,109 @@ export default function App() {
     setCurrentTurnIndex(prev => (prev + 1) % playersRef.current.length);
   };
 
+  const removePlayerDueToTimeout = async (playerId) => {
+    if (!isHost) return;
+
+    try {
+      const { data: game } = await supabase
+        .from("games")
+        .select("id, current_turn_index, logs")
+        .eq("code", gameCode)
+        .single();
+
+      if (!game) return;
+
+      const playerToRemove = playersRef.current.find(p => p.id === playerId);
+      if (!playerToRemove) return;
+
+      console.log(`Executing deletion for player ${playerToRemove.name} (${playerId}) from database...`);
+
+      // 1. Delete player from game_players table
+      await supabase
+        .from("game_players")
+        .delete()
+        .eq("game_id", game.id)
+        .eq("client_player_id", playerId);
+
+      // 2. Determine new turn index and winner state
+      const remainingPlayers = playersRef.current.filter(p => p.id !== playerId);
+      const removedIndex = playersRef.current.findIndex(p => p.id === playerId);
+
+      if (remainingPlayers.length <= 1) {
+        // If only 1 player remains (usually the host), they win!
+        const winnerPlayer = remainingPlayers[0] || playersRef.current.find(p => p.id === myPlayerId);
+        
+        const updatePayload = {
+          status: "finished",
+          winner_id: winnerPlayer ? winnerPlayer.id : myPlayerId,
+          logs: [`${playerToRemove.name} was removed due to inactivity.`, `🎉 ${winnerPlayer ? winnerPlayer.name : "Host"} wins the game! 🎉`, ...(game.logs || [])].slice(0, 5)
+        };
+
+        await supabase
+          .from("games")
+          .update(updatePayload)
+          .eq("id", game.id);
+      } else {
+        // Calculate the next turn index
+        let nextTurnIndex = game.current_turn_index || 0;
+        if (removedIndex === nextTurnIndex) {
+          nextTurnIndex = removedIndex % remainingPlayers.length;
+        } else if (removedIndex < nextTurnIndex) {
+          nextTurnIndex = nextTurnIndex - 1;
+        }
+
+        const updatePayload = {
+          current_turn_index: nextTurnIndex,
+          logs: [`${playerToRemove.name} was removed due to inactivity.`, ...(game.logs || [])].slice(0, 5)
+        };
+
+        await supabase
+          .from("games")
+          .update(updatePayload)
+          .eq("id", game.id);
+      }
+    } catch (err) {
+      console.error("Error in removePlayerDueToTimeout:", err);
+    }
+  };
+
+  const handleTimeoutTracking = async (playerId, isAutoRoll) => {
+    if (!isHost) return;
+
+    if (isAutoRoll) {
+      const currentCount = (consecutiveTimeoutsRef.current[playerId] || 0) + 1;
+      consecutiveTimeoutsRef.current[playerId] = currentCount;
+      console.log(`Player ${playerId} has timed out ${currentCount} time(s) consecutively.`);
+
+      if (currentCount >= 2) {
+        console.log(`Player ${playerId} reached 2 consecutive timeouts. Removing player...`);
+        await removePlayerDueToTimeout(playerId);
+      }
+    } else {
+      // Reset counter on successful manual roll
+      consecutiveTimeoutsRef.current[playerId] = 0;
+      console.log(`Reset timeouts for player ${playerId} due to manual roll.`);
+    }
+  };
+
   const handleRoll = () => {
     if (isRolling || winner || !board) return;
 
     const currentPlayer = players[currentTurnIndex];
-    if (currentPlayer.isBot) return; // Bot handles its own roll
+    if (currentPlayer.isBot) return;
 
-    executeTurn(currentPlayer);
+    // Direct check: In online play, you can only roll on your OWN turn!
+    if (isOnline && currentPlayer.id !== myPlayerId) {
+      return;
+    }
+
+    executeTurn(currentPlayer, false);
   };
 
-  const executeTurn = async (player) => {
-    setIsRolling(true); // turn is busy, blocks double rolls
-    setIsDiceRolling(true); // start spinning the 3D dice!
+  const executeTurn = async (player, isAutoRoll = false) => {
+    setIsRolling(true);
+    setIsDiceRolling(true);
 
-    // Roll 6 automatically on 6th attempt if player has failed to unlock 5 times
     const isPlayerAtHome = player.position === 0;
     const currentAttempts = player.unlockAttempts || 0;
     const isGuaranteedSix = isPlayerAtHome && currentAttempts >= 5;
@@ -505,16 +1209,19 @@ export default function App() {
     const roll = isGuaranteedSix ? 6 : rollDice();
     setDiceValue(roll);
 
-    // Set the player's lastRoll immediately so it will be ready when the spin finishes
     setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, lastRoll: roll } : p));
 
-    // 1. Wait 1200ms for dice rolling animation to complete
+    // Broadcast dice roll event so other screens start spinning
+    if (isOnline && broadcastChannelRef.current) {
+      broadcastChannelRef.current.send({
+        type: "broadcast",
+        event: "dice-rolling",
+        payload: { playerId: player.id, roll }
+      });
+    }
+
     await new Promise(resolve => setTimeout(resolve, 1200));
-
-    // 2. Stop dice spinning! (Dice shows the settled face value)
     setIsDiceRolling(false);
-
-    // 3. Pause 300ms so they see the landed number and dice has fully settled
     await new Promise(resolve => setTimeout(resolve, 300));
 
     const latestBoard = boardRef.current;
@@ -530,27 +1237,25 @@ export default function App() {
     let updatedAttempts = currentPlayer.unlockAttempts || 0;
     let grantsAnotherTurn = false;
     let logMsg = "";
+    let boardElements = { type: "none" };
 
     if (currentPos === 0) {
-      // Home state unlocking logic
       if (roll === 6) {
-        updatedAttempts = 0; // successfully unlocked
+        updatedAttempts = 0;
         currentPos = 1;
         logMsg = `Unlocked from home! You get another turn.`;
         grantsAnotherTurn = true;
 
-        // Slide token from bottom starting tray to cell 1
         setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: 1, unlockAttempts: 0, lastRoll: roll } : p));
-        await new Promise(resolve => setTimeout(resolve, 600)); // wait for single slide animation
+        await new Promise(resolve => setTimeout(resolve, 600));
       } else {
-        updatedAttempts += 1; // failed unlock attempt
+        updatedAttempts += 1;
         logMsg = `Rolled a ${roll}. Need a 6 to unlock from home.`;
         
         setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, unlockAttempts: updatedAttempts, lastRoll: roll } : p));
         await new Promise(resolve => setTimeout(resolve, 600));
       }
     } else {
-      // Normal grid-based walking
       const targetRollPos = currentPos + roll;
       
       if (targetRollPos > 100) {
@@ -558,30 +1263,25 @@ export default function App() {
         setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, lastRoll: roll } : p));
         await new Promise(resolve => setTimeout(resolve, 600));
       } else {
-        // Move one by one cell! (Snappy, continuous walking)
         for (let step = currentPos + 1; step <= targetRollPos; step++) {
           setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
           await new Promise(resolve => setTimeout(resolve, 350));
         }
 
-        // Stop walking animation
         setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isWalking: false } : p));
-
         currentPos = targetRollPos;
-        await new Promise(resolve => setTimeout(resolve, 400)); // Pause briefly at landing cell
+        await new Promise(resolve => setTimeout(resolve, 400));
 
-        // Check for board elements (snakes & ladders)
         const ladder = latestBoard.ladders.find(l => l.bottom === currentPos);
         const snake = latestBoard.snakes.find(s => s.head === currentPos);
 
         if (ladder) {
           logMsg = `Rolled a ${roll}. Climbed a ladder from ${ladder.bottom} to ${ladder.top}!`;
+          boardElements = { type: "ladder", top: ladder.top };
           
-          // Toggle climbing leans/pulses
           setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: true } : p));
           await new Promise(resolve => setTimeout(resolve, 50));
 
-          // Climb/slide up the ladder
           setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: ladder.top } : p));
           await new Promise(resolve => setTimeout(resolve, 900));
 
@@ -592,12 +1292,11 @@ export default function App() {
             logMsg = `Rolled a ${roll}. Landed on your OWN snake at ${snake.head}! Immune!`;
           } else {
             logMsg = `Rolled a ${roll}. Bitten by a snake! Slide down from ${snake.head} to ${snake.tail}.`;
+            boardElements = { type: "snake", tail: snake.tail };
 
-            // 1. Shaking panic at snake head
             setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: true } : p));
             await new Promise(resolve => setTimeout(resolve, 750));
 
-            // 2. Swallow slide down to snake tail
             setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: false, isSwallowed: true } : p));
             await new Promise(resolve => setTimeout(resolve, 50));
 
@@ -620,6 +1319,22 @@ export default function App() {
 
     addLog(`${player.name}: ${logMsg}`);
 
+    // Broadcast the action details to animate in perfect visual sync on other clients
+    if (isOnline && broadcastChannelRef.current) {
+      broadcastChannelRef.current.send({
+        type: "broadcast",
+        event: "turn-animation",
+        payload: { 
+          playerId: player.id, 
+          roll, 
+          startPos: player.position, 
+          targetPos: currentPos, 
+          boardElements,
+          isAutoRoll
+        }
+      });
+    }
+
     if (currentPos === 100) {
       setWinner(currentPlayer);
       addLog(`🎉 ${player.name} wins the game! 🎉`);
@@ -628,7 +1343,56 @@ export default function App() {
         nextTurn();
       }
     }
+
+    // Sync final turn state to database source-of-truth
+    if (isOnline) {
+      try {
+        const { data: game } = await supabase
+          .from("games")
+          .select("id")
+          .eq("code", gameCode)
+          .single();
+
+        if (game) {
+          await supabase
+            .from("game_players")
+            .update({
+              position: currentPos,
+              unlock_attempts: updatedAttempts,
+              last_roll: roll
+            })
+            .eq("game_id", game.id)
+            .eq("client_player_id", player.id);
+
+          const nextTurnIndex = grantsAnotherTurn ? currentTurnIndex : (currentTurnIndex + 1) % players.length;
+          const updatedLogs = [`${player.name}: ${logMsg}`, ...logs].slice(0, 5);
+          
+          const updatePayload = {
+            current_turn_index: nextTurnIndex,
+            dice_value: roll,
+            logs: updatedLogs
+          };
+
+          if (currentPos === 100) {
+            updatePayload.winner_id = player.id;
+            updatePayload.status = "finished";
+          }
+
+          await supabase
+            .from("games")
+            .update(updatePayload)
+            .eq("id", game.id);
+        }
+      } catch (err) {
+        console.error("Failed to sync turn to database:", err);
+      }
+    }
+
     setIsRolling(false);
+
+    if (isOnline && isHost) {
+      handleTimeoutTracking(player.id, isAutoRoll);
+    }
   };
 
   // Bot logic inside useEffect (players is NOT a dependency to prevent infinite loops)
@@ -642,6 +1406,38 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [inGame, winner, currentTurnIndex, isRolling]);
+
+  // Auto-play timer for online multi-device games
+  useEffect(() => {
+    if (!inGame || winner || isRolling || isDiceRolling || !isOnline) return;
+
+    const latestPlayers = playersRef.current;
+    const activePlayer = latestPlayers[currentTurnIndex];
+    if (!activePlayer || activePlayer.isBot) return;
+
+    // Check if the current client is the active player
+    const isActivePlayerClient = activePlayer.id === myPlayerId;
+
+    // Check if the current client is the host
+    const isHostClient = isHost;
+
+    let timeoutMs = 0;
+    if (isActivePlayerClient) {
+      timeoutMs = 10000; // 10 seconds for the active player
+    } else if (isHostClient) {
+      timeoutMs = 12000; // 12 seconds for the host (fallback in case of disconnect/AFK)
+    }
+
+    if (timeoutMs > 0) {
+      const timer = setTimeout(() => {
+        console.log(`Auto-rolling for ${activePlayer.name} after ${timeoutMs}ms of inactivity...`);
+        executeTurn(activePlayer, true);
+      }, timeoutMs);
+
+      return () => clearTimeout(timer);
+    }
+  }, [inGame, winner, currentTurnIndex, isRolling, isDiceRolling, isOnline, isHost, myPlayerId]);
+
 
   const generateConfettiParticles = () => {
     const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#a855f7", "#ec4899", "#06b6d4"];
@@ -732,6 +1528,38 @@ export default function App() {
             gap: 1rem !important;
             height: auto !important;
             padding: 0.5rem 0 !important;
+          }
+        }
+        @media (max-width: 1150px) and (min-width: 769px) {
+          .tabletop-grid {
+            grid-template-columns: 1fr 1fr !important;
+            gap: 1rem !important;
+            max-width: 600px !important;
+          }
+          .tabletop-grid > :nth-child(1) {
+            grid-column: 1 !important;
+            grid-row: 1 !important;
+            flex-direction: row !important;
+            justify-content: flex-end !important;
+            gap: 1rem !important;
+            height: auto !important;
+            padding: 0.5rem 0 !important;
+          }
+          .tabletop-grid > :nth-child(3) {
+            grid-column: 2 !important;
+            grid-row: 1 !important;
+            flex-direction: row !important;
+            justify-content: flex-start !important;
+            gap: 1rem !important;
+            height: auto !important;
+            padding: 0.5rem 0 !important;
+          }
+          .tabletop-grid > :nth-child(2) {
+            grid-column: 1 / span 2 !important;
+            grid-row: 2 !important;
+            width: 100% !important;
+            max-width: 550px !important;
+            margin: 0 auto !important;
           }
         }
 
@@ -867,7 +1695,25 @@ export default function App() {
         gameMode === null ? (
           <ModeSelectionComponent onSelectMode={(mode) => setGameMode(mode)} />
         ) : (
-          <LobbyComponent onStart={startGame} onBack={() => setGameMode(null)} gameMode={gameMode} initialTheme={activeTheme} />
+          <LobbyComponent
+            onStart={startGame}
+            onBack={() => setGameMode(null)}
+            gameMode={gameMode}
+            initialTheme={activeTheme}
+            onlineState={{
+              isOnline,
+              gameCode,
+              joinedPlayers,
+              isHost,
+              myPlayerId,
+              isConnecting
+            }}
+            onCreateOnlineRoom={handleCreateOnlineRoom}
+            onJoinOnlineRoom={handleJoinOnlineRoom}
+            onStartOnlineGame={handleStartOnlineGame}
+            onLeaveOnlineRoom={handleLeaveOnlineRoom}
+            onToggleOnlineMode={setIsOnline}
+          />
         )
       ) : (
         <div style={{ display: "flex", gap: "2rem", width: "100%", maxWidth: "1250px", flexWrap: "wrap", justifyContent: "center" }}>
@@ -998,18 +1844,11 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Quick Exit Button */}
                     <button
                       className="btn btn-outline"
                       onClick={() => {
                         if (confirm("Are you sure you want to exit the current match? All progress will be lost.")) {
-                          setInGame(false);
-                          setPlayers([]);
-                          setBoard(null);
-                          setWinner(null);
-                          setLogs([]);
-                          setDiceValue(null);
-                          setGameMode(null);
+                          exitGame();
                         }
                       }}
                       style={{ width: "100%", maxWidth: "340px", borderColor: "#ef4444", color: "#ef4444", padding: "8px 16px", fontSize: "0.85rem", borderRadius: "8px" }}
@@ -1100,13 +1939,7 @@ export default function App() {
                 className="btn btn-outline"
                 onClick={() => {
                   if (confirm("Are you sure you want to exit the current match? All progress will be lost.")) {
-                    setInGame(false);
-                    setPlayers([]);
-                    setBoard(null);
-                    setWinner(null);
-                    setLogs([]);
-                    setDiceValue(null);
-                    setGameMode(null);
+                    exitGame();
                   }
                 }}
                 style={{ width: "100%", borderColor: "#ef4444", color: "#ef4444", marginTop: "1rem" }}
@@ -1144,21 +1977,19 @@ export default function App() {
               A spectacular victory! Reached cell 100 with incredible strategy, lucky rolls, and board mastery. 🏆
             </p>
             <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
-              <button className="btn" style={{ flex: 1, padding: "14px 28px" }} onClick={restartSameGame}>
-                Play Again 🔄
-              </button>
+              {(!isOnline || isHost) ? (
+                <button className="btn" style={{ flex: 1, padding: "14px 28px" }} onClick={restartSameGame}>
+                  Play Again 🔄
+                </button>
+              ) : (
+                <button className="btn" style={{ flex: 1, padding: "14px 28px", opacity: 0.6, cursor: "not-allowed" }} disabled>
+                  Waiting for Host... ⏳
+                </button>
+              )}
               <button 
                 className="btn btn-outline" 
                 style={{ flex: 1, padding: "14px 28px", borderColor: "rgba(255,255,255,0.2)", color: "white" }} 
-                onClick={() => {
-                  setInGame(false);
-                  setPlayers([]);
-                  setBoard(null);
-                  setWinner(null);
-                  setLogs([]);
-                  setDiceValue(null);
-                  setGameMode(null);
-                }}
+                onClick={exitGame}
               >
                 Main Menu 🚪
               </button>
