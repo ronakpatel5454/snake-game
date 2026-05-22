@@ -107,7 +107,7 @@ export default function LobbyComponent({
   // Local Play starter
   const validateAndStart = () => {
     const usedCells = new Set();
-    if (gameMode !== "classic") {
+    if (gameMode === "own-snake") {
       for (let config of playerConfigs) {
         if (config.ownSnake < 15 || config.ownSnake > 99) {
           alert(`Own snake head for ${config.name} must be between 15 and 99.`);
@@ -136,7 +136,7 @@ export default function LobbyComponent({
     let finalLadders = numLadders;
 
     if (!customBoardElements) {
-      if (gameMode === "classic") {
+      if (gameMode !== "own-snake") {
         finalSnakes = Math.floor(Math.random() * 3) + 5;
         finalLadders = Math.floor(Math.random() * 4) + 3;
       } else {
@@ -165,7 +165,7 @@ export default function LobbyComponent({
       alert("Please enter a name first.");
       return;
     }
-    if (gameMode !== "classic" && (onlineOwnSnake < 15 || onlineOwnSnake > 99)) {
+    if (gameMode === "own-snake" && (onlineOwnSnake < 15 || onlineOwnSnake > 99)) {
       alert("Safe Snake head must be between 15 and 99.");
       return;
     }
@@ -189,7 +189,7 @@ export default function LobbyComponent({
       alert("Please enter a name first.");
       return;
     }
-    if (gameMode !== "classic" && (onlineOwnSnake < 15 || onlineOwnSnake > 99)) {
+    if (gameMode === "own-snake" && (onlineOwnSnake < 15 || onlineOwnSnake > 99)) {
       alert("Safe Snake head must be between 15 and 99.");
       return;
     }
@@ -206,7 +206,7 @@ export default function LobbyComponent({
     let finalLadders = numLadders;
 
     if (!customBoardElements) {
-      if (gameMode === "classic") {
+      if (gameMode !== "own-snake") {
         finalSnakes = Math.floor(Math.random() * 3) + 5;
         finalLadders = Math.floor(Math.random() * 4) + 3;
       } else {
@@ -341,7 +341,7 @@ export default function LobbyComponent({
                         </span>
                       )}
                     </div>
-                    {gameMode !== "classic" && (
+                    {gameMode === "own-snake" && (
                       <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
                         Safe Snake: <strong style={{ color: player.color }}>{player.ownSnakeNumber}</strong>
                       </div>
@@ -544,7 +544,7 @@ export default function LobbyComponent({
                 </div>
               </div>
 
-              {gameMode !== "classic" && (
+              {gameMode === "own-snake" && (
                 <div>
                   <label style={{ display: "block", fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
                     Your Immune Snake Head (15 - 99)
@@ -653,7 +653,7 @@ export default function LobbyComponent({
                       disabled={isSinglePlayer && idx === 1}
                     />
                   </div>
-                  {gameMode !== "classic" && (
+                  {gameMode === "own-snake" && (
                     <div style={{ flex: "1 1 150px" }}>
                       <label style={{ display: "block", fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>Own Snake (15-99)</label>
                       <input 
@@ -666,7 +666,7 @@ export default function LobbyComponent({
                     </div>
                   )}
                 </div>
-                {gameMode !== "classic" && (
+                {gameMode === "own-snake" && (
                   <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.5rem" }}>
                     A snake will start at {config.ownSnake}. It will NOT bite you, but it WILL bite other players!
                   </p>

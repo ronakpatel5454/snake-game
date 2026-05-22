@@ -291,6 +291,13 @@ function ModeSelectionComponent({ onSelectMode }) {
       badge: "Active"
     },
     {
+      id: "negative-snake",
+      title: "Negative Snake Mode 🐍",
+      description: "Snakes swallow you UP to higher cells, while ladders pull you DOWN! A complete inversion of the classic race.",
+      active: true,
+      badge: "Active"
+    },
+    {
       id: "championship",
       title: "Championship Mode 🏆",
       description: "Ranked multiplayer with timed turns, hazard cells, and competitive match lobbies.",
@@ -978,8 +985,8 @@ export default function App() {
     setSetupSnakesCount(numSnakes);
     setSetupLaddersCount(numLadders);
     setPlayers(setupPlayers);
-    const playerSnakeHeads = gameMode === "classic" ? [] : setupPlayers.map(p => p.ownSnakeNumber);
-    setBoard(generateBoard(playerSnakeHeads, numSnakes, numLadders));
+    const playerSnakeHeads = gameMode === "own-snake" ? setupPlayers.map(p => p.ownSnakeNumber) : [];
+    setBoard(generateBoard(playerSnakeHeads, numSnakes, numLadders, gameMode));
     setInGame(true);
     setCurrentTurnIndex(0);
     setLogs(["Game started!"]);
@@ -997,8 +1004,8 @@ export default function App() {
 
       if (!game) return;
 
-      const playerSnakeHeads = gameMode === "classic" ? [] : joinedPlayers.map(p => p.ownSnakeNumber);
-      const generated = generateBoard(playerSnakeHeads, finalSnakes, finalLadders);
+      const playerSnakeHeads = gameMode === "own-snake" ? joinedPlayers.map(p => p.ownSnakeNumber) : [];
+      const generated = generateBoard(playerSnakeHeads, finalSnakes, finalLadders, gameMode);
 
       const resetPromises = joinedPlayers.map(p => 
         supabase
@@ -1046,8 +1053,8 @@ export default function App() {
 
         if (!game) return;
 
-        const playerSnakeHeads = gameMode === "classic" ? [] : players.map(p => p.ownSnakeNumber);
-        const generated = generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount);
+        const playerSnakeHeads = gameMode === "own-snake" ? players.map(p => p.ownSnakeNumber) : [];
+        const generated = generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount, gameMode);
 
         const resetPromises = players.map(p => 
           supabase
@@ -1086,8 +1093,8 @@ export default function App() {
       lastRoll: 1
     }));
     setPlayers(resetPlayers);
-    const playerSnakeHeads = gameMode === "classic" ? [] : resetPlayers.map(p => p.ownSnakeNumber);
-    setBoard(generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount));
+    const playerSnakeHeads = gameMode === "own-snake" ? resetPlayers.map(p => p.ownSnakeNumber) : [];
+    setBoard(generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount, gameMode));
     setInGame(true);
     setCurrentTurnIndex(0);
     setLogs(["Match restarted! Go, go, go! 🚀"]);
@@ -1272,42 +1279,83 @@ export default function App() {
         currentPos = targetRollPos;
         await new Promise(resolve => setTimeout(resolve, 400));
 
-        const ladder = latestBoard.ladders.find(l => l.bottom === currentPos);
-        const snake = latestBoard.snakes.find(s => s.head === currentPos);
+        let hitLadder = null;
+        let hitSnake = null;
 
-        if (ladder) {
-          logMsg = `Rolled a ${roll}. Climbed a ladder from ${ladder.bottom} to ${ladder.top}!`;
-          boardElements = { type: "ladder", top: ladder.top };
-          
-          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: true } : p));
-          await new Promise(resolve => setTimeout(resolve, 50));
+        if (gameMode === "negative-snake") {
+          hitLadder = latestBoard.ladders.find(l => l.top === currentPos);
+          hitSnake = latestBoard.snakes.find(s => s.head === currentPos);
+        } else {
+          hitLadder = latestBoard.ladders.find(l => l.bottom === currentPos);
+          hitSnake = latestBoard.snakes.find(s => s.head === currentPos);
+        }
 
-          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: ladder.top } : p));
-          await new Promise(resolve => setTimeout(resolve, 900));
-
-          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: false } : p));
-          currentPos = ladder.top;
-        } else if (snake) {
-          if (gameMode !== "classic" && currentPos === currentPlayer.ownSnakeNumber) {
-            logMsg = `Rolled a ${roll}. Landed on your OWN snake at ${snake.head}! Immune!`;
-          } else {
-            logMsg = `Rolled a ${roll}. Bitten by a snake! Slide down from ${snake.head} to ${snake.tail}.`;
-            boardElements = { type: "snake", tail: snake.tail };
-
+        if (gameMode === "negative-snake") {
+          if (hitLadder) {
+            logMsg = `Rolled a ${roll}. Slid down a ladder from ${hitLadder.top} to ${hitLadder.bottom}!`;
+            boardElements = { type: "snake", tail: hitLadder.bottom };
+            
             setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: true } : p));
             await new Promise(resolve => setTimeout(resolve, 750));
 
             setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: false, isSwallowed: true } : p));
             await new Promise(resolve => setTimeout(resolve, 50));
 
-            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: snake.tail } : p));
+            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: hitLadder.bottom } : p));
             await new Promise(resolve => setTimeout(resolve, 1000));
 
             setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isSwallowed: false } : p));
-            currentPos = snake.tail;
+            currentPos = hitLadder.bottom;
+          } else if (hitSnake) {
+            logMsg = `Rolled a ${roll}. Swallowed UP by a supportive snake from ${hitSnake.head} to ${hitSnake.tail}!`;
+            boardElements = { type: "ladder", top: hitSnake.tail };
+
+            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: true } : p));
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: hitSnake.tail } : p));
+            await new Promise(resolve => setTimeout(resolve, 900));
+
+            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: false } : p));
+            currentPos = hitSnake.tail;
+          } else {
+            logMsg = `Rolled a ${roll}.`;
           }
         } else {
-          logMsg = `Rolled a ${roll}.`;
+          if (hitLadder) {
+            logMsg = `Rolled a ${roll}. Climbed a ladder from ${hitLadder.bottom} to ${hitLadder.top}!`;
+            boardElements = { type: "ladder", top: hitLadder.top };
+            
+            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: true } : p));
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: hitLadder.top } : p));
+            await new Promise(resolve => setTimeout(resolve, 900));
+
+            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: false } : p));
+            currentPos = hitLadder.top;
+          } else if (hitSnake) {
+            if (gameMode === "own-snake" && currentPos === currentPlayer.ownSnakeNumber) {
+              logMsg = `Rolled a ${roll}. Landed on your OWN snake at ${hitSnake.head}! Immune!`;
+            } else {
+              logMsg = `Rolled a ${roll}. Bitten by a snake! Slide down from ${hitSnake.head} to ${hitSnake.tail}.`;
+              boardElements = { type: "snake", tail: hitSnake.tail };
+
+              setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: true } : p));
+              await new Promise(resolve => setTimeout(resolve, 750));
+
+              setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: false, isSwallowed: true } : p));
+              await new Promise(resolve => setTimeout(resolve, 50));
+
+              setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: hitSnake.tail } : p));
+              await new Promise(resolve => setTimeout(resolve, 1000));
+
+              setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isSwallowed: false } : p));
+              currentPos = hitSnake.tail;
+            }
+          } else {
+            logMsg = `Rolled a ${roll}.`;
+          }
         }
 
         if (roll === 6) {
@@ -1914,7 +1962,7 @@ export default function App() {
                       <span>{p.name} {p.isBot && "🤖"}</span>
                     </div>
                     <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
-                      Pos: {p.position} {gameMode !== "classic" && `| Own Snake: ${p.ownSnakeNumber}`}
+                      Pos: {p.position} {gameMode === "own-snake" && `| Own Snake: ${p.ownSnakeNumber}`}
                     </div>
                   </div>
                 ))}

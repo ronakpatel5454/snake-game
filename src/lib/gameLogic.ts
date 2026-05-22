@@ -22,7 +22,12 @@ export interface GameBoard {
   ladders: Ladder[];
 }
 
-export function generateBoard(): GameBoard {
+export function generateBoard(
+  playerSnakeHeads: number[] = [],
+  numSnakes: number = 3,
+  numLadders: number = 5,
+  gameMode: string = "own-snake"
+): GameBoard {
   const snakes: Snake[] = [];
   const ladders: Ladder[] = [];
   const usedCells = new Set<number>([1, 100]); // 1 and 100 cannot be start/end points
@@ -37,13 +42,43 @@ export function generateBoard(): GameBoard {
     return false;
   };
 
-  // Generate 7 snakes
-  for (let i = 0; i < 7; i++) {
+  const isNegativeSnake = gameMode === "negative-snake";
+
+  // 1. Generate Player Owned Snakes first (only if not classic/negative-snake)
+  if (gameMode === "own-snake") {
+    playerSnakeHeads.forEach(head => {
+      let tail = 0;
+      let attempts = 0;
+      while (attempts < 100) {
+        tail = getRandomCell(2, head - 10);
+        if (!usedCells.has(tail)) {
+          usedCells.add(head);
+          usedCells.add(tail);
+          snakes.push({ head, tail });
+          snakeHeads.add(head);
+          break;
+        }
+        attempts++;
+      }
+    });
+  }
+
+  // 2. Generate random snakes based on custom count
+  const topRowSnakesNeeded = isNegativeSnake ? 0 : Math.min(numSnakes, Math.floor(Math.random() * 2) + 1);
+
+  for (let i = 0; i < numSnakes; i++) {
     let head = 0, tail = 0;
     let attempts = 0;
+    const mustBeTopRow = i < topRowSnakesNeeded;
+
     while (attempts < 100) {
-      head = getRandomCell(15, 99);
-      tail = getRandomCell(2, head - 10);
+      if (isNegativeSnake) {
+        head = getRandomCell(2, 85);
+        tail = getRandomCell(head + 10, 99);
+      } else {
+        head = mustBeTopRow ? getRandomCell(91, 99) : getRandomCell(15, 99);
+        tail = getRandomCell(2, head - 10);
+      }
       if (!usedCells.has(head) && !usedCells.has(tail) && !causesSequenceOfThree(head, snakeHeads)) {
         usedCells.add(head);
         usedCells.add(tail);
@@ -55,13 +90,22 @@ export function generateBoard(): GameBoard {
     }
   }
 
-  // Generate 7 ladders
-  for (let i = 0; i < 7; i++) {
+  // 3. Generate ladders based on custom count
+  const topRowLaddersNeeded = isNegativeSnake ? Math.min(numLadders, Math.floor(Math.random() * 2) + 1) : 0;
+
+  for (let i = 0; i < numLadders; i++) {
     let bottom = 0, top = 0;
     let attempts = 0;
+    const mustBeTopRow = i < topRowLaddersNeeded;
+
     while (attempts < 100) {
-      bottom = getRandomCell(2, 85);
-      top = getRandomCell(bottom + 10, 99);
+      if (mustBeTopRow) {
+        top = getRandomCell(91, 99);
+        bottom = getRandomCell(2, top - 10);
+      } else {
+        bottom = getRandomCell(2, 85);
+        top = getRandomCell(bottom + 10, 99);
+      }
       if (!usedCells.has(bottom) && !usedCells.has(top)) {
         usedCells.add(bottom);
         usedCells.add(top);
@@ -115,21 +159,37 @@ export function calculateNewPosition(
     return { position: newPos, message, wasSafeSnake, grantsAnotherTurn };
   }
 
-  // Check ladders
-  const ladder = board.ladders.find(l => l.bottom === newPos);
-  if (ladder) {
-    newPos = ladder.top;
-    message += ` Climbed a ladder from ${ladder.bottom} to ${ladder.top}!`;
-  } else {
-    // Check snakes
-    const snake = board.snakes.find(s => s.head === newPos);
-    if (snake) {
-      if (gameMode !== "classic" && newPos === player.safeSnakeNumber) {
-        wasSafeSnake = true;
-        message += ` Landed on snake at ${snake.head}, but it's your SAFE SNAKE! Immune!`;
-      } else {
+  if (gameMode === "negative-snake") {
+    // Check ladders (they slide you DOWN from the top in negative-snake mode)
+    const ladder = board.ladders.find(l => l.top === newPos);
+    if (ladder) {
+      newPos = ladder.bottom;
+      message += ` Slid down a ladder from ${ladder.top} to ${ladder.bottom}!`;
+    } else {
+      // Check snakes (they slide you UP from the head in negative-snake mode)
+      const snake = board.snakes.find(s => s.head === newPos);
+      if (snake) {
         newPos = snake.tail;
-        message += ` Bitten by a snake! Slide down from ${snake.head} to ${snake.tail}.`;
+        message += ` Boosted UP by a snake from ${snake.head} to ${snake.tail}!`;
+      }
+    }
+  } else {
+    // Check ladders
+    const ladder = board.ladders.find(l => l.bottom === newPos);
+    if (ladder) {
+      newPos = ladder.top;
+      message += ` Climbed a ladder from ${ladder.bottom} to ${ladder.top}!`;
+    } else {
+      // Check snakes
+      const snake = board.snakes.find(s => s.head === newPos);
+      if (snake) {
+        if (gameMode !== "classic" && newPos === player.safeSnakeNumber) {
+          wasSafeSnake = true;
+          message += ` Landed on snake at ${snake.head}, but it's your SAFE SNAKE! Immune!`;
+        } else {
+          newPos = snake.tail;
+          message += ` Bitten by a snake! Slide down from ${snake.head} to ${snake.tail}.`;
+        }
       }
     }
   }

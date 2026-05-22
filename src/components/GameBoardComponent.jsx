@@ -615,7 +615,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
       })}
 
       {/* Highlight Owned Snake Heads */}
-      {gameMode !== "classic" && players.map(p => {
+      {gameMode === "own-snake" && players.map(p => {
         const { x, y } = getCoordinates(p.ownSnakeNumber);
         return (
           <div
@@ -833,7 +833,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
           }
 
           // Find if this snake is owned by any player
-          const ownerPlayer = gameMode !== "classic" ? players.find(p => p.ownSnakeNumber === snake.head) : null;
+          const ownerPlayer = gameMode === "own-snake" ? players.find(p => p.ownSnakeNumber === snake.head) : null;
 
           const isNeon = theme === "neon";
           const isForest = theme === "forest";
