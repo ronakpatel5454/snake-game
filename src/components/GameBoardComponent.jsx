@@ -82,7 +82,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
         background: config.boardBg,
         borderRadius: "16px",
         overflow: "visible", // Allows white token outlines and home pods to render cleanly without clipping
-        boxShadow: theme === "neon" || theme === "space" ? `${config.glow}, 0 15px 35px rgba(0,0,0,0.6)` : "0 15px 35px rgba(0,0,0,0.6)",
+        boxShadow: config.glow ? `${config.glow}, 0 15px 35px rgba(0,0,0,0.6)` : "0 15px 35px rgba(0,0,0,0.6)",
         border: config.border,
         boxSizing: "border-box"
       }}
@@ -317,6 +317,63 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                 ))}
               </g>
             );
+          } else if (theme === "sakura") {
+            return (
+              <g key={`ladder-${idx}`}>
+                {/* 3D Rose Gold Shadow */}
+                <line x1={lx1 + 2} y1={ly1 + 2} x2={lx2 + 2} y2={ly2 + 2} stroke="rgba(244, 63, 94, 0.15)" strokeWidth={railWidth * 1.5} strokeLinecap="round" />
+                <line x1={rx1 + 2} y1={ry1 + 2} x2={rx2 + 2} y2={ry2 + 2} stroke="rgba(244, 63, 94, 0.15)" strokeWidth={railWidth * 1.5} strokeLinecap="round" />
+                
+                {/* Rose Gold Rails */}
+                <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#fb7185" strokeWidth={railWidth * 1.4} strokeLinecap="round" />
+                <line x1={rx1} y1={ry1} x2={rx2} y2={ry2} stroke="#fb7185" strokeWidth={railWidth * 1.4} strokeLinecap="round" />
+                <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#fff1f2" strokeWidth={railWidth * 0.4} strokeLinecap="round" />
+                <line x1={rx1} y1={ry1} x2={rx2} y2={ry2} stroke="#fff1f2" strokeWidth={railWidth * 0.4} strokeLinecap="round" />
+
+                {/* Sweet flower branch rungs with flower details */}
+                {rungs.map((r, rIdx) => (
+                  <g key={`rung-${rIdx}`}>
+                    <line x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} stroke="#fda4af" strokeWidth={rungWidth * 1.5} strokeLinecap="round" />
+                    
+                    {/* Cherry Blossom Flower node overlay on joints! */}
+                    <circle cx={r.x1} cy={r.y1} r={cellSize * 0.038} fill="#f43f5e" stroke="#ffe4e6" strokeWidth="0.8" />
+                    <circle cx={r.x1} cy={r.y1} r={cellSize * 0.015} fill="#fef08a" />
+                    
+                    <circle cx={r.x2} cy={r.y2} r={cellSize * 0.038} fill="#f43f5e" stroke="#ffe4e6" strokeWidth="0.8" />
+                    <circle cx={r.x2} cy={r.y2} r={cellSize * 0.015} fill="#fef08a" />
+                  </g>
+                ))}
+              </g>
+            );
+          } else if (theme === "candy") {
+            return (
+              <g key={`ladder-${idx}`}>
+                {/* 3D Shadow */}
+                <line x1={lx1 + 2.5} y1={ly1 + 2.5} x2={lx2 + 2.5} y2={ly2 + 2.5} stroke="rgba(0,0,0,0.25)" strokeWidth={railWidth * 1.5} strokeLinecap="round" />
+                <line x1={rx1 + 2.5} y1={ry1 + 2.5} x2={rx2 + 2.5} y2={ry2 + 2.5} stroke="rgba(0,0,0,0.25)" strokeWidth={railWidth * 1.5} strokeLinecap="round" />
+                
+                {/* Bubblegum Chocolate Stick Rails */}
+                <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#f472b6" strokeWidth={railWidth * 1.8} strokeLinecap="round" />
+                <line x1={rx1} y1={ry1} x2={rx2} y2={ry2} stroke="#f472b6" strokeWidth={railWidth * 1.8} strokeLinecap="round" />
+                <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#ffffff" strokeWidth={railWidth * 0.5} strokeLinecap="round" strokeDasharray="3 3" />
+                <line x1={rx1} y1={ry1} x2={rx2} y2={ry2} stroke="#ffffff" strokeWidth={railWidth * 0.5} strokeLinecap="round" strokeDasharray="3 3" />
+
+                {/* Sweet Licorice Rungs with colorful sprinkles at joints */}
+                {rungs.map((r, rIdx) => {
+                  const colors = ["#38bdf8", "#fbbf24", "#a78bfa", "#34d399"];
+                  const sprinkleColor = colors[rIdx % colors.length];
+                  return (
+                    <g key={`rung-${rIdx}`}>
+                      <line x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} stroke="#db2777" strokeWidth={rungWidth * 1.8} strokeLinecap="round" />
+                      
+                      {/* Sprinkles on the rail joints */}
+                      <circle cx={r.x1} cy={r.y1} r={cellSize * 0.035} fill={sprinkleColor} stroke="#ffffff" strokeWidth="0.6" />
+                      <circle cx={r.x2} cy={r.y2} r={cellSize * 0.035} fill={sprinkleColor} stroke="#ffffff" strokeWidth="0.6" />
+                    </g>
+                  );
+                })}
+              </g>
+            );
           } else {
             // Classic toys mode
             return (
@@ -388,6 +445,8 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
           const isNeon = theme === "neon";
           const isForest = theme === "forest";
           const isSpace = theme === "space";
+          const isSakura = theme === "sakura";
+          const isCandy = theme === "candy";
 
           // Curated colors matching owner colors or a vibrant classic green
           let baseColor = ownerPlayer ? ownerPlayer.color : "#22c55e"; 
@@ -402,6 +461,12 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
           } else if (isSpace) {
             baseColor = "#a855f7";
             patternColor = "#ec4899";
+          } else if (isSakura) {
+            baseColor = "#be123c"; // Dark Pink / crimson rose
+            patternColor = "#fbcfe8"; // Sweet blossom pink
+          } else if (isCandy) {
+            baseColor = "#db2777"; // Magenta pink
+            patternColor = "#ffffff"; // Sugar white
           }
 
           // Base dimensions for the tapered body
@@ -425,6 +490,25 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
             tongueElement = <circle cx={start.cx + tx * 0.7} cy={start.cy + ty * 0.7} r={cellSize * 0.025} fill="#4ade80" />;
           } else if (isSpace) {
             tongueElement = <line x1={start.cx} y1={start.cy} x2={start.cx + tx * 0.8} y2={start.cy + ty * 0.8} stroke="#fef08a" strokeWidth="1.8" strokeLinecap="round" opacity="0.8" />;
+          } else if (isSakura) {
+            tongueElement = (
+              <g>
+                <line x1={start.cx} y1={start.cy} x2={start.cx + tx} y2={start.cy + ty} stroke="#d97706" strokeWidth="2.8" strokeLinecap="round" />
+                <line x1={start.cx + tx} y1={start.cy + ty} x2={start.cx + tx - headUy * 4.5 - headUx * 2.5} y2={start.cy + ty + headUx * 4.5 - headUy * 2.5} stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" />
+                <line x1={start.cx + tx} y1={start.cy + ty} x2={start.cx + tx + headUy * 4.5 - headUx * 2.5} y2={start.cy + ty - headUx * 4.5 - headUy * 2.5} stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" />
+                {/* Tiny golden tip dots */}
+                <circle cx={start.cx + tx - headUy * 4.5 - headUx * 2.5} cy={start.cy + ty + headUx * 4.5 - headUy * 2.5} r={cellSize * 0.015} fill="#fef08a" />
+                <circle cx={start.cx + tx + headUy * 4.5 - headUx * 2.5} cy={start.cy + ty - headUx * 4.5 - headUy * 2.5} r={cellSize * 0.015} fill="#fef08a" />
+              </g>
+            );
+          } else if (isCandy) {
+            tongueElement = (
+              <g>
+                <line x1={start.cx} y1={start.cy} x2={start.cx + tx} y2={start.cy + ty} stroke="#f472b6" strokeWidth="3" strokeLinecap="round" />
+                <line x1={start.cx + tx} y1={start.cy + ty} x2={start.cx + tx - headUy * 4 - headUx * 2} y2={start.cy + ty + headUx * 4 - headUy * 2} stroke="#f472b6" strokeWidth="2.4" strokeLinecap="round" />
+                <line x1={start.cx + tx} y1={start.cy + ty} x2={start.cx + tx + headUy * 4 - headUx * 2} y2={start.cy + ty - headUx * 4 - headUy * 2} stroke="#f472b6" strokeWidth="2.4" strokeLinecap="round" />
+              </g>
+            );
           } else {
             tongueElement = (
               <g>
@@ -463,6 +547,78 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                 <circle cx={start.cx - headUy * 5 - headUx * 1.5} cy={start.cy + headUx * 5 - headUy * 1.5} r={cellSize * 0.02} fill="white" />
                 <circle cx={start.cx + headUy * 5 - headUx * 1.5} cy={start.cy - headUx * 5 - headUy * 1.5} r={cellSize * 0.055} fill="#fef08a" />
                 <circle cx={start.cx + headUy * 5 - headUx * 1.5} cy={start.cy - headUx * 5 - headUy * 1.5} r={cellSize * 0.02} fill="white" />
+              </g>
+            );
+          } else if (isSakura) {
+            headElement = (
+              <g>
+                {/* Head base */}
+                <circle cx={start.cx} cy={start.cy} r={bodyWidth * 0.8 + 1.5} fill="#9f1239" />
+                <circle cx={start.cx} cy={start.cy} r={bodyWidth * 0.8} fill={baseColor} />
+                {/* Cute rosy blush cheeks */}
+                <circle cx={start.cx - headUy * 6.5 - headUx * 1.5} cy={start.cy + headUx * 6.5 - headUy * 1.5} r={cellSize * 0.05} fill="#f43f5e" opacity="0.7" />
+                <circle cx={start.cx + headUy * 6.5 - headUx * 1.5} cy={start.cy - headUx * 6.5 - headUy * 1.5} r={cellSize * 0.05} fill="#f43f5e" opacity="0.7" />
+                {/* Anime Eyes */}
+                <circle cx={start.cx - headUy * 5.5 - headUx * 1.5} cy={start.cy + headUx * 5.5 - headUy * 1.5} r={cellSize * 0.075} fill="white" stroke="#9f1239" strokeWidth="1" />
+                <circle cx={start.cx + headUy * 5.5 - headUx * 1.5} cy={start.cy - headUx * 5.5 - headUy * 1.5} r={cellSize * 0.075} fill="white" stroke="#9f1239" strokeWidth="1" />
+                {/* Pupil with shiny reflection */}
+                <circle cx={start.cx - headUy * 4.5 - headUx * 2} cy={start.cy + headUx * 4.5 - headUy * 2} r={cellSize * 0.04} fill="#4c0519" />
+                <circle cx={start.cx + headUy * 4.5 - headUx * 2} cy={start.cy - headUx * 4.5 - headUy * 2} r={cellSize * 0.04} fill="#4c0519" />
+                <circle cx={start.cx - headUy * 5.5 - headUx * 2.5} cy={start.cy + headUx * 5.5 - headUy * 2.5} r={cellSize * 0.018} fill="white" />
+                <circle cx={start.cx + headUy * 5.5 - headUx * 2.5} cy={start.cy - headUx * 5.5 - headUy * 2.5} r={cellSize * 0.018} fill="white" />
+                
+                {/* Golden Flower Crown */}
+                <path 
+                  d={`M ${start.cx - headUy * 7 + headUx * 3} ${start.cy + headUx * 7 + headUy * 3} 
+                      Q ${start.cx + headUx * 6} ${start.cy + headUy * 6} 
+                        ${start.cx + headUy * 7 + headUx * 3} ${start.cy - headUx * 7 + headUy * 3}`} 
+                  stroke="#eab308" 
+                  strokeWidth="1.5" 
+                  fill="none" 
+                />
+                {/* Crown Blossom Center */}
+                <circle cx={start.cx + headUx * 5.5} cy={start.cy + headUy * 5.5} r={cellSize * 0.038} fill="#f43f5e" stroke="#eab308" strokeWidth="0.8" />
+                <circle cx={start.cx + headUx * 5.5} cy={start.cy + headUy * 5.5} r={cellSize * 0.015} fill="#fef08a" />
+                
+                {/* Crown Blossom Left */}
+                <circle cx={start.cx - headUy * 4.5 + headUx * 4.5} cy={start.cy + headUx * 4.5 + headUy * 4.5} r={cellSize * 0.025} fill="#fda4af" stroke="#eab308" strokeWidth="0.6" />
+                {/* Crown Blossom Right */}
+                <circle cx={start.cx + headUy * 4.5 + headUx * 4.5} cy={start.cy - headUx * 4.5 + headUy * 4.5} r={cellSize * 0.025} fill="#fda4af" stroke="#eab308" strokeWidth="0.6" />
+              </g>
+            );
+          } else if (isCandy) {
+            headElement = (
+              <g>
+                {/* Frosting Swirl (Cupcake Head) */}
+                {/* Shadow */}
+                <circle cx={start.cx} cy={start.cy} r={bodyWidth * 0.85 + 1.5} fill="#2e1065" />
+                {/* Main frosting head */}
+                <circle cx={start.cx} cy={start.cy} r={bodyWidth * 0.85} fill="#f472b6" />
+                {/* Cupcake Liner base bottom */}
+                <path 
+                  d={`M ${start.cx - headUy * 6.5 + headUx * 4} ${start.cy + headUx * 6.5 + headUy * 4}
+                      L ${start.cx - headUy * 4.5 - headUx * 3} ${start.cy + headUx * 4.5 - headUy * 3}
+                      L ${start.cx + headUy * 4.5 - headUx * 3} ${start.cy - headUx * 4.5 - headUy * 3}
+                      L ${start.cx + headUy * 6.5 + headUx * 4} ${start.cy - headUx * 6.5 + headUy * 4} Z`} 
+                  fill="#fbcfe8" 
+                  stroke="#db2777" 
+                  strokeWidth="1" 
+                />
+                {/* Swirled Frosting Overlays */}
+                <circle cx={start.cx - headUy * 2.5 + headUx * 1} cy={start.cy + headUx * 2.5 + headUy * 1} r={bodyWidth * 0.45} fill="#ffffff" />
+                <circle cx={start.cx + headUy * 2.5 + headUx * 1} cy={start.cy - headUx * 2.5 + headUy * 1} r={bodyWidth * 0.45} fill="#ffffff" />
+                <circle cx={start.cx + headUx * 3.5} cy={start.cy + headUy * 3.5} r={bodyWidth * 0.4} fill="#f472b6" />
+                
+                {/* Glazed Cherry on top */}
+                <circle cx={start.cx + headUx * 7.5} cy={start.cy + headUy * 7.5} r={cellSize * 0.045} fill="#ef4444" stroke="#ffffff" strokeWidth="0.6" />
+                {/* Cherry stem */}
+                <path d={`M ${start.cx + headUx * 7.5} ${start.cy + headUy * 7.5} Q ${start.cx + headUx * 12} ${start.cy + headUy * 6} ${start.cx + headUx * 11 + headUy * 3}`} stroke="#15803d" strokeWidth="1" fill="none" />
+                
+                {/* Tiny sprinkle eyes */}
+                <circle cx={start.cx - headUy * 4.5 - headUx * 1} cy={start.cy + headUx * 4.5 - headUy * 1} r={cellSize * 0.035} fill="#701a75" />
+                <circle cx={start.cx + headUy * 4.5 - headUx * 1} cy={start.cy - headUx * 4.5 - headUy * 1} r={cellSize * 0.035} fill="#701a75" />
+                <circle cx={start.cx - headUy * 5.2 - headUx * 1.5} cy={start.cy + headUx * 5.2 - headUy * 1.5} r={cellSize * 0.012} fill="white" />
+                <circle cx={start.cx + headUy * 5.2 - headUx * 1.5} cy={start.cy - headUx * 5.2 - headUy * 1.5} r={cellSize * 0.012} fill="white" />
               </g>
             );
           } else {
@@ -626,8 +782,134 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                 </g>
               )}
 
+              {/* Sakura Blossom garland petal-snake */}
+              {isSakura && (
+                <g>
+                  {/* 3D Shadows */}
+                  {points.map((p, pIdx) => {
+                    const t = pIdx / numSteps;
+                    const radius = cellSize * (0.16 - t * 0.1);
+                    return (
+                      <circle
+                        key={`sakura-sh-${pIdx}`}
+                        cx={p.x + 2}
+                        cy={p.y + 2}
+                        r={radius}
+                        fill="rgba(159, 18, 57, 0.15)"
+                      />
+                    );
+                  })}
+                  {/* Overlapping Petals Garland */}
+                  {points.map((p, pIdx) => {
+                    const t = pIdx / numSteps;
+                    const radius = cellSize * (0.16 - t * 0.1);
+                    const angle = (pIdx * 45) % 360;
+                    return (
+                      <g key={`sakura-petal-${pIdx}`} transform={`rotate(${angle}, ${p.x}, ${p.y})`}>
+                        {/* Petal Path */}
+                        <path
+                          d={`M ${p.x} ${p.y - radius} C ${p.x + radius} ${p.y - radius * 0.5} ${p.x + radius * 0.8} ${p.y + radius * 0.8} ${p.x} ${p.y + radius} C ${p.x - radius * 0.8} ${p.y + radius * 0.8} ${p.x - radius} ${p.y - radius * 0.5} ${p.x} ${p.y - radius}`}
+                          fill={pIdx % 2 === 0 ? "#be123c" : "#f43f5e"}
+                          stroke="#ffe4e6"
+                          strokeWidth="0.8"
+                        />
+                        {/* Petal mid vein highlight */}
+                        <path
+                          d={`M ${p.x} ${p.y + radius * 0.7} Q ${p.x} ${p.y - radius * 0.2} ${p.x} ${p.y - radius * 0.5}`}
+                          stroke="#fbcfe8"
+                          strokeWidth="1"
+                          strokeLinecap="round"
+                          opacity="0.8"
+                        />
+                      </g>
+                    );
+                  })}
+                  {/* Golden blossom centers periodically */}
+                  {points.map((p, pIdx) => {
+                    if (pIdx % 6 !== 0 || pIdx < 3 || pIdx > numSteps - 3) return null;
+                    return (
+                      <circle
+                        key={`sakura-center-${pIdx}`}
+                        cx={p.x}
+                        cy={p.y}
+                        r={cellSize * 0.03}
+                        fill="#fef08a"
+                        stroke="#eab308"
+                        strokeWidth="0.6"
+                      />
+                    );
+                  })}
+                </g>
+              )}
+
+              {/* Sweet Candy striped helical sprinkle-snake */}
+              {isCandy && (
+                <g>
+                  {/* 3D Shadows */}
+                  {points.map((p, pIdx) => {
+                    const t = pIdx / numSteps;
+                    const radius = cellSize * (0.16 - t * 0.09);
+                    return (
+                      <circle
+                        key={`candy-sh-${pIdx}`}
+                        cx={p.x + 2.5}
+                        cy={p.y + 2.5}
+                        r={radius}
+                        fill="rgba(0, 0, 0, 0.2)"
+                      />
+                    );
+                  })}
+                  {/* Helical body outlines */}
+                  {points.map((p, pIdx) => {
+                    const t = pIdx / numSteps;
+                    const radius = cellSize * (0.16 - t * 0.09) + 1.2;
+                    return (
+                      <circle
+                        key={`candy-out-${pIdx}`}
+                        cx={p.x}
+                        cy={p.y}
+                        r={radius}
+                        fill="#2e1065"
+                      />
+                    );
+                  })}
+                  {/* Alternating striped base colors */}
+                  {points.map((p, pIdx) => {
+                    const t = pIdx / numSteps;
+                    const radius = cellSize * (0.16 - t * 0.09);
+                    const segmentColor = pIdx % 2 === 0 ? "#db2777" : "#ffffff";
+                    return (
+                      <circle
+                        key={`candy-base-${pIdx}`}
+                        cx={p.x}
+                        cy={p.y}
+                        r={radius}
+                        fill={segmentColor}
+                      />
+                    );
+                  })}
+                  {/* Add round sprinkles on segments */}
+                  {points.map((p, pIdx) => {
+                    if (pIdx % 4 !== 0 || pIdx < 3 || pIdx > numSteps - 3) return null;
+                    const colors = ["#38bdf8", "#fbbf24", "#a78bfa", "#34d399"];
+                    const sprinkleColor = colors[pIdx % colors.length];
+                    return (
+                      <circle
+                        key={`candy-sprinkle-${pIdx}`}
+                        cx={p.x + (pIdx % 2 === 0 ? 1 : -1) * (cellSize * 0.03)}
+                        cy={p.y + (pIdx % 3 === 0 ? 1 : -1) * (cellSize * 0.03)}
+                        r={cellSize * 0.03}
+                        fill={sprinkleColor}
+                        stroke="#2e1065"
+                        strokeWidth="0.5"
+                      />
+                    );
+                  })}
+                </g>
+              )}
+
               {/* Classic / Default Tapered Green cartoon snake */}
-              {!isNeon && !isForest && !isSpace && (
+              {!isNeon && !isForest && !isSpace && !isSakura && !isCandy && (
                 <g>
                   {/* 1. 3D Drop Shadow */}
                   {points.map((p, pIdx) => {

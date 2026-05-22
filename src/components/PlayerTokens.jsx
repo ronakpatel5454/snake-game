@@ -373,6 +373,127 @@ export function CosmicAstronautToken({ color, size = "100%", style }) {
   );
 }
 
+// Highly stylized, premium SVG Sakura Bunny token
+export function CuteSakuraBunny({ color, size = "100%", style }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      style={{
+        filter: "drop-shadow(0px 3.5px 5.5px rgba(244, 63, 94, 0.45))",
+        overflow: "visible",
+        ...style
+      }}
+    >
+      {/* Outer Outline */}
+      <g stroke="white" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.95">
+        <path d="M 28 34 Q 8 10 24 15 T 40 34 Z" />
+        <path d="M 72 34 Q 92 10 76 15 T 60 34 Z" />
+        <circle cx="50" cy="48" r="24" />
+        <path d="M 34 70 C 34 85, 66 85, 66 70 Z" />
+      </g>
+
+      {/* Left Bunny Ear */}
+      <path d="M 28 34 Q 8 10 24 15 T 40 34 Z" fill="#ffe4e6" stroke="#fb7185" strokeWidth="1.5" />
+      {/* Left Ear Inner Pink */}
+      <path d="M 29 30 Q 14 14 24 18 T 36 30 Z" fill="#f43f5e" opacity="0.5" />
+
+      {/* Right Bunny Ear */}
+      <path d="M 72 34 Q 92 10 76 15 T 60 34 Z" fill="#ffe4e6" stroke="#fb7185" strokeWidth="1.5" />
+      {/* Right Ear Inner Pink */}
+      <path d="M 71 30 Q 86 14 76 18 T 64 30 Z" fill="#f43f5e" opacity="0.5" />
+
+      {/* Face Base */}
+      <circle cx="50" cy="48" r="24" fill="#fff5f5" stroke="#fb7185" strokeWidth="1.5" />
+
+      {/* Cherry Blossom Hair Accessory */}
+      <g transform="translate(50, 26) scale(0.7)">
+        <path d="M 0 0 C -5 -10, 5 -10, 0 0" fill="#f43f5e" />
+        <path d="M 0 0 C 10 -5, 10 5, 0 0" fill="#f43f5e" />
+        <path d="M 0 0 C 5 10, -5 10, 0 0" fill="#f43f5e" />
+        <path d="M 0 0 C -10 5, -10 -5, 0 0" fill="#f43f5e" />
+        <path d="M 0 0 C -8 -8, -8 8, 0 0" fill="#fda4af" />
+        <circle cx="0" cy="0" r="2.5" fill="#fef08a" />
+      </g>
+
+      {/* Big Anime Eyes */}
+      <ellipse cx="40" cy="46" rx="3.5" ry="5" fill="#2d0612" />
+      <circle cx="38.5" cy="43.5" r="1.2" fill="white" />
+      <circle cx="41.5" cy="48" r="0.6" fill="white" />
+
+      <ellipse cx="60" cy="46" rx="3.5" ry="5" fill="#2d0612" />
+      <circle cx="58.5" cy="43.5" r="1.2" fill="white" />
+      <circle cx="61.5" cy="48" r="0.6" fill="white" />
+
+      {/* Cheeks blush */}
+      <ellipse cx="32" cy="52" rx="3.5" ry="2" fill="#fb7185" opacity="0.6" />
+      <ellipse cx="68" cy="52" rx="3.5" ry="2" fill="#fb7185" opacity="0.6" />
+
+      {/* Cute bunny mouth */}
+      <path d="M 47 53 Q 50 56 53 53" fill="none" stroke="#9f1239" strokeWidth="1.5" strokeLinecap="round" />
+
+      {/* Cute Bunny Dress matching player color */}
+      <path d="M 34 70 C 30 85, 70 85, 66 70 Z" fill={color} stroke="#fb7185" strokeWidth="1.5" />
+      
+      {/* Flower details on dress */}
+      <circle cx="50" cy="77" r="3.2" fill="white" />
+      <circle cx="50" cy="77" r="1" fill="#fef08a" />
+    </svg>
+  );
+}
+
+// Highly stylized, premium SVG Bubblegum Cupcake token
+export function SweetCupcakeToken({ color, size = "100%", style }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      style={{
+        filter: "drop-shadow(0px 3.5px 6.5px rgba(236, 72, 153, 0.45))",
+        overflow: "visible",
+        ...style
+      }}
+    >
+      {/* Outer Outline */}
+      <g stroke="white" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.95">
+        <path d="M 30 62 L 36 86 L 64 86 L 70 62 Z" />
+        <path d="M 22 62 C 16 52, 84 52, 78 62 C 86 42, 14 42, 22 62 Z" />
+        <circle cx="50" cy="34" r="16" />
+        <circle cx="50" cy="20" r="5" />
+      </g>
+
+      {/* Cupcake Wrapper (pleated, matching player color) */}
+      <path d="M 30 62 L 36 86 L 64 86 L 70 62 Z" fill={color} stroke="#3b0764" strokeWidth="1.5" />
+      {/* Wrapper Pleat Lines */}
+      <line x1="38" y1="62" x2="42" y2="86" stroke="rgba(0,0,0,0.2)" strokeWidth="1.5" />
+      <line x1="46" y1="62" x2="48" y2="86" stroke="rgba(0,0,0,0.2)" strokeWidth="1.5" />
+      <line x1="54" y1="62" x2="52" y2="86" stroke="rgba(0,0,0,0.2)" strokeWidth="1.5" />
+      <line x1="62" y1="62" x2="58" y2="86" stroke="rgba(0,0,0,0.2)" strokeWidth="1.5" />
+
+      {/* Bubblegum Pink Frosting Layers */}
+      <path d="M 22 62 Q 50 72 78 62 Q 84 50 72 48 Q 50 56 28 48 Q 16 50 22 62 Z" fill="#f472b6" stroke="#3b0764" strokeWidth="1.5" />
+      <path d="M 28 48 Q 50 56 72 48 Q 78 38 66 36 Q 50 42 34 36 Q 22 38 28 48 Z" fill="#fbcfe8" stroke="#3b0764" strokeWidth="1.5" />
+      
+      {/* Swirly Top Frosting */}
+      <circle cx="50" cy="34" r="11" fill="#fff1f2" stroke="#3b0764" strokeWidth="1.5" />
+
+      {/* Glazed Cherry on Top */}
+      <circle cx="50" cy="20" r="6.5" fill="#e11d48" stroke="#4c0519" strokeWidth="1.5" />
+      <path d="M 50 13.5 Q 56 6 52 2" fill="none" stroke="#4c0519" strokeWidth="1.2" strokeLinecap="round" />
+      <circle cx="48" cy="18" r="1.5" fill="white" opacity="0.9" />
+
+      {/* Sweet Sprinkles */}
+      <rect x="36" y="54" width="4" height="1.8" rx="0.5" fill="#38bdf8" transform="rotate(15 36 54)" />
+      <rect x="62" y="52" width="4" height="1.8" rx="0.5" fill="#fbbf24" transform="rotate(-30 62 52)" />
+      <rect x="48" y="48" width="4" height="1.8" rx="0.5" fill="#a78bfa" transform="rotate(45 48 48)" />
+      <rect x="44" y="38" width="4" height="1.8" rx="0.5" fill="#f472b6" transform="rotate(-15 44 38)" />
+      <rect x="56" y="36" width="4" height="1.8" rx="0.5" fill="#34d399" transform="rotate(60 56 36)" />
+    </svg>
+  );
+}
+
 // Combined PlayerToken router component
 export default function PlayerToken({ theme, color, size = "100%", style }) {
   if (theme === "neon") {
@@ -381,6 +502,10 @@ export default function PlayerToken({ theme, color, size = "100%", style }) {
     return <WoodlandFoxToken color={color} size={size} style={style} />;
   } else if (theme === "space") {
     return <CosmicAstronautToken color={color} size={size} style={style} />;
+  } else if (theme === "sakura") {
+    return <CuteSakuraBunny color={color} size={size} style={style} />;
+  } else if (theme === "candy") {
+    return <SweetCupcakeToken color={color} size={size} style={style} />;
   }
   return <CuteBoyCookie color={color} size={size} style={style} />;
 }

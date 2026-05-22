@@ -7,6 +7,7 @@ export default function LobbyComponent({
   onBack, 
   gameMode, 
   initialTheme,
+  onThemeChange,
   // Online Multiplayer Props
   onlineState = { isOnline: false, gameCode: "", joinedPlayers: [], isHost: false, myPlayerId: "", isConnecting: false },
   onCreateOnlineRoom,
@@ -23,6 +24,13 @@ export default function LobbyComponent({
     { name: "Player 2", ownSnake: 60 },
   ]);
   const [selectedTheme, setSelectedTheme] = useState(initialTheme || "classic");
+
+  // Keep selectedTheme synchronized with initialTheme changes
+  useEffect(() => {
+    if (initialTheme) {
+      setSelectedTheme(initialTheme);
+    }
+  }, [initialTheme]);
 
   // Default parameters as currently used
   const [numSnakes, setNumSnakes] = useState(3);
@@ -411,7 +419,9 @@ export default function LobbyComponent({
                       { id: "classic", name: "Classic Toys 🎲", color: "#ef4444" },
                       { id: "neon", name: "Retro Arcade 👾", color: "#6366f1" },
                       { id: "forest", name: "Jungle Expedition 🌿", color: "#10b981" },
-                      { id: "space", name: "Cosmic Odyssey 🚀", color: "#a855f7" }
+                      { id: "space", name: "Cosmic Odyssey 🚀", color: "#a855f7" },
+                      { id: "sakura", name: "Sakura Blossom 🌸", color: "#f43f5e" },
+                      { id: "candy", name: "Sweet Candy 🍭", color: "#f472b6" }
                     ].map(t => {
                       const isSelected = selectedTheme === t.id;
                       return (
@@ -726,7 +736,9 @@ export default function LobbyComponent({
                 { id: "classic", name: "Classic Toys 🎲", desc: "Nostalgic colorful checkers, plastic blue/red ladders.", color: "#ef4444" },
                 { id: "neon", name: "Retro Arcade 👾", desc: "Deep grid space, neon cyan/magenta laser paths.", color: "#6366f1" },
                 { id: "forest", name: "Jungle Expedition 🌿", desc: "Woodland green and brown terrain, log ladders.", color: "#10b981" },
-                { id: "space", name: "Cosmic Odyssey 🚀", desc: "Starry starry nebula, gravity wormhole channels.", color: "#a855f7" }
+                { id: "space", name: "Cosmic Odyssey 🚀", desc: "Starry starry nebula, gravity wormhole channels.", color: "#a855f7" },
+                { id: "sakura", name: "Sakura Blossom 🌸", desc: "Pastel cherry blossom garden with rosy halos & bunny tokens.", color: "#f43f5e" },
+                { id: "candy", name: "Sweet Candy 🍭", desc: "Cotton candy neon gradients, grape purple grid & cupcake tokens.", color: "#f472b6" }
               ].map(t => {
                 const isSelected = selectedTheme === t.id;
                 return (

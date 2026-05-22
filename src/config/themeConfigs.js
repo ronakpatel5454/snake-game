@@ -60,5 +60,37 @@ export const THEME_CONFIGS = {
     homeTrayBg: "radial-gradient(circle at center, #1e1b4b 0%, #03001e 100%)",
     homeTrayBorder: "3.5px solid #a855f7",
     glow: "0 0 25px rgba(168, 85, 247, 0.35)"
+  },
+  sakura: {
+    boardBg: "#fff5f5",
+    border: "3.5px solid #f43f5e",
+    cellBorder: "1.5px solid #ffe4e6",
+    gridBands: [
+      { isDark: "#fecdd3", isLight: "#fff1f2" }, // Soft Sakura Rose
+      { isDark: "#fbcfe8", isLight: "#fdf2f8" }, // Sweet Pink
+      { isDark: "#f5d0fe", isLight: "#fdf4ff" }, // Lavender Petals
+      { isDark: "#fed7aa", isLight: "#fff7ed" }, // Peach Pearl
+      { isDark: "#fed7a0", isLight: "#fffae8" }  // Golden Blossom
+    ],
+    cellTextColor: "#9f1239",
+    homeTrayBg: "linear-gradient(180deg, #ffe4e6 0%, #fff1f2 100%)",
+    homeTrayBorder: "3.5px solid #f43f5e",
+    glow: "0 0 25px rgba(244, 63, 94, 0.45)"
+  },
+  candy: {
+    boardBg: "#0f051d",
+    border: "3.5px solid #f472b6",
+    cellBorder: "1.5px solid #2e1065",
+    gridBands: [
+      { isDark: "#1a0833", isLight: "#2e1065" }, // Bubblegum Grape
+      { isDark: "#032b45", isLight: "#075985" }, // Cotton Candy Blue
+      { isDark: "#2d0628", isLight: "#701a75" }, // Candy Magenta
+      { isDark: "#3f0c1a", isLight: "#9d174d" }, // Lolly Pop Pink
+      { isDark: "#2d1606", isLight: "#7c2d12" }  // Toffee Orange
+    ],
+    cellTextColor: "#fbcfe8",
+    homeTrayBg: "linear-gradient(180deg, #2e1065 0%, #0f051d 100%)",
+    homeTrayBorder: "3.5px solid #f472b6",
+    glow: "0 0 25px rgba(244, 114, 182, 0.45)"
   }
 };

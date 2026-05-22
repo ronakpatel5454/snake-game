@@ -1690,6 +1690,8 @@ export default function App() {
                               {themeKey === "neon" && "✨"}
                               {themeKey === "forest" && "🌿"}
                               {themeKey === "space" && "🌌"}
+                              {themeKey === "sakura" && "🌸"}
+                              {themeKey === "candy" && "🍭"}
                             </button>
                           );
                         })}
@@ -1819,6 +1821,8 @@ export default function App() {
                       {themeKey === "neon" && "✨ "}
                       {themeKey === "forest" && "🌿 "}
                       {themeKey === "space" && "🌌 "}
+                      {themeKey === "sakura" && "🌸 "}
+                      {themeKey === "candy" && "🍭 "}
                       {themeLabel}
                     </button>
                   );
