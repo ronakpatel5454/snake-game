@@ -3,6 +3,11 @@ import GameBoardComponent from "./components/GameBoardComponent";
 import LobbyComponent from "./components/LobbyComponent";
 import { generateBoard, rollDice, calculateNewPosition } from "./lib/gameLogic";
 import { supabase } from "./lib/supabase";
+import PlayerCornerCard from "./components/PlayerCornerCard";
+import ModeSelectionComponent from "./components/ModeSelectionComponent";
+import Premium3DDice from "./components/Premium3DDice";
+import { THEME_CONFIGS } from "./config/themeConfigs";
+import RulesModal from "./components/RulesModal";
 
 const getClientPlayerId = () => {
   let id = localStorage.getItem("snake_game_client_player_id");
@@ -13,355 +18,6 @@ const getClientPlayerId = () => {
   return id;
 };
 
-function Premium3DDice({ value, color, isRolling, theme }) {
-  const val = value || 1;
-
-  // 3D rotations to face each rolled side
-  const getRotation = (num) => {
-    switch (num) {
-      case 1: return "rotateX(0deg) rotateY(0deg)";
-      case 6: return "rotateX(180deg) rotateY(0deg)";
-      case 4: return "rotateX(0deg) rotateY(-90deg)";
-      case 3: return "rotateX(0deg) rotateY(90deg)";
-      case 2: return "rotateX(-90deg) rotateY(0deg)";
-      case 5: return "rotateX(90deg) rotateY(0deg)";
-      default: return "rotateX(0deg) rotateY(0deg)";
-    }
-  };
-
-  // Standard dice layout generator using perfectly centered CSS grid points
-  const renderFaceDots = (num) => {
-    let dots = [];
-    if (num === 1) {
-      dots = [{ row: 2, col: 2 }];
-    } else if (num === 2) {
-      dots = [{ row: 1, col: 1 }, { row: 3, col: 3 }];
-    } else if (num === 3) {
-      dots = [{ row: 1, col: 1 }, { row: 2, col: 2 }, { row: 3, col: 3 }];
-    } else if (num === 4) {
-      dots = [{ row: 1, col: 1 }, { row: 1, col: 3 }, { row: 3, col: 1 }, { row: 3, col: 3 }];
-    } else if (num === 5) {
-      dots = [{ row: 1, col: 1 }, { row: 1, col: 3 }, { row: 2, col: 2 }, { row: 3, col: 1 }, { row: 3, col: 3 }];
-    } else if (num === 6) {
-      dots = [
-        { row: 1, col: 1 }, { row: 1, col: 3 },
-        { row: 2, col: 1 }, { row: 2, col: 3 },
-        { row: 3, col: 1 }, { row: 3, col: 3 }
-      ];
-    }
-
-    const isNeon = theme === "neon";
-    const isForest = theme === "forest";
-    const isSpace = theme === "space";
-
-    let dotBg = "white";
-    let dotShadow = "0 1px 2px rgba(0,0,0,0.4), inset 0 -1px 1px rgba(0,0,0,0.2)";
-    let clipPath = undefined;
-    let dotSize = "8px";
-
-    if (isNeon) {
-      dotBg = color;
-      dotShadow = `0 0 8px ${color}`;
-    } else if (isForest) {
-      dotBg = "#451a03";
-      dotShadow = "inset 0 1px 1px rgba(0,0,0,0.6)";
-    } else if (isSpace) {
-      dotBg = "#fef08a"; // gold stardust
-      dotShadow = "0 0 6px #fef08a";
-      clipPath = "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)";
-      dotSize = "10px";
-    }
-
-    return (
-      <div style={{
-        display: "grid",
-        gridTemplate: "repeat(3, 1fr) / repeat(3, 1fr)",
-        width: "100%",
-        height: "100%",
-        padding: "6px",
-        boxSizing: "border-box"
-      }}>
-        {dots.map((d, i) => (
-          <div
-            key={i}
-            style={{
-              gridRow: d.row,
-              gridColumn: d.col,
-              width: dotSize,
-              height: dotSize,
-              background: dotBg,
-              borderRadius: isSpace ? undefined : "50%",
-              boxShadow: dotShadow,
-              clipPath: clipPath,
-              alignSelf: "center",
-              justifySelf: "center"
-            }}
-          />
-        ))}
-      </div>
-    );
-  };
-
-  let faceBg = color;
-  let faceBorder = "1.5px solid rgba(15, 23, 42, 0.85)";
-  let faceShadow = "inset 0 2px 3px rgba(255,255,255,0.4), inset 0 -2px 3px rgba(0,0,0,0.35), 0 3px 5px rgba(0,0,0,0.25)";
-
-  if (theme === "neon") {
-    faceBg = "#090d16";
-    faceBorder = `2.5px solid ${color}`;
-    faceShadow = `0 0 10px ${color}, inset 0 0 8px ${color}88`;
-  } else if (theme === "forest") {
-    faceBg = "linear-gradient(135deg, #d97706 0%, #b45309 100%)";
-    faceBorder = "1.5px solid #78350f";
-    faceShadow = "inset 0 2px 4px rgba(251, 191, 36, 0.2), inset 0 -2px 4px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3)";
-  } else if (theme === "space") {
-    faceBg = `radial-gradient(circle, ${color}cc 0%, #1e1b4b ee 100%)`;
-    faceBorder = "1.5px solid rgba(255, 255, 255, 0.6)";
-    faceShadow = "0 0 12px rgba(255, 255, 255, 0.2), inset 0 2px 4px rgba(255,255,255,0.3), inset 0 -2px 4px rgba(0,0,0,0.4)";
-  }
-
-  return (
-    <div style={{
-      width: "100px",
-      height: "100px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      perspective: "600px",
-      margin: "0.5rem 0"
-    }}>
-      <style>{`
-        @keyframes dice-3d-spin {
-          0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
-          100% { transform: rotateX(720deg) rotateY(1080deg) rotateZ(360deg); }
-        }
-        .dice-3d-cube {
-          width: 50px;
-          height: 50px;
-          position: relative;
-          transform-style: preserve-3d;
-          transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
-        }
-        .dice-3d-cube.spinning {
-          animation: dice-3d-spin 1.2s infinite linear;
-        }
-        .dice-3d-face {
-          position: absolute;
-          width: 50px;
-          height: 50px;
-          border-radius: 8px;
-          backface-visibility: hidden;
-        }
-      `}</style>
-
-      <div
-        className={`dice-3d-cube ${isRolling ? "spinning" : ""}`}
-        style={{
-          transform: isRolling ? undefined : getRotation(val)
-        }}
-      >
-        {/* Face 1 (Front) */}
-        <div className="dice-3d-face" style={{ background: faceBg, border: faceBorder, boxShadow: faceShadow, transform: "rotateY(0deg) translateZ(25px)" }}>
-          {renderFaceDots(1)}
-        </div>
-        {/* Face 6 (Back) */}
-        <div className="dice-3d-face" style={{ background: faceBg, border: faceBorder, boxShadow: faceShadow, transform: "rotateY(180deg) translateZ(25px)" }}>
-          {renderFaceDots(6)}
-        </div>
-        {/* Face 4 (Left) */}
-        <div className="dice-3d-face" style={{ background: faceBg, border: faceBorder, boxShadow: faceShadow, transform: "rotateY(-90deg) translateZ(25px)" }}>
-          {renderFaceDots(4)}
-        </div>
-        {/* Face 3 (Right) */}
-        <div className="dice-3d-face" style={{ background: faceBg, border: faceBorder, boxShadow: faceShadow, transform: "rotateY(90deg) translateZ(25px)" }}>
-          {renderFaceDots(3)}
-        </div>
-        {/* Face 2 (Top) */}
-        <div className="dice-3d-face" style={{ background: faceBg, border: faceBorder, boxShadow: faceShadow, transform: "rotateX(90deg) translateZ(25px)" }}>
-          {renderFaceDots(2)}
-        </div>
-        {/* Face 5 (Bottom) */}
-        <div className="dice-3d-face" style={{ background: faceBg, border: faceBorder, boxShadow: faceShadow, transform: "rotateX(-90deg) translateZ(25px)" }}>
-          {renderFaceDots(5)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PlayerCornerCard({ player, isActive, isRolling, isDiceRolling, onRoll, theme }) {
-  if (!player) return null;
-
-  return (
-    <div
-      className="glass"
-      style={{
-        padding: "0.75rem",
-        borderRadius: "16px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        border: isActive ? `2px solid ${player.color}` : "1.5px solid var(--surface-light)",
-        boxShadow: isActive ? `0 0 15px ${player.color}44` : "none",
-        transition: "all 0.3s ease",
-        width: "120px",
-        textAlign: "center",
-        margin: "auto"
-      }}
-    >
-      <div style={{
-        fontWeight: "bold",
-        fontSize: "0.85rem",
-        color: player.color,
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        maxWidth: "100px",
-        marginBottom: "0.25rem"
-      }}>
-        {player.name} {player.isBot && "🤖"}
-      </div>
-      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
-        Pos: {player.position}
-      </div>
-
-      <div
-        onClick={() => {
-          if (isActive && !isRolling && !player.isBot) {
-            onRoll();
-          }
-        }}
-        style={{
-          cursor: (isActive && !player.isBot) ? "pointer" : "default",
-          transform: isActive ? "scale(1.05)" : "scale(0.95)",
-          transition: "transform 0.2s"
-        }}
-      >
-        <Premium3DDice
-          value={player.lastRoll || 1}
-          color={player.color}
-          isRolling={isActive && isDiceRolling}
-          theme={theme}
-        />
-      </div>
-
-      {isActive && !player.isBot ? (
-        <div style={{
-          fontSize: "0.75rem",
-          fontWeight: "bold",
-          color: player.color,
-          animation: "pulse 1.5s infinite",
-          marginTop: "0.25rem",
-          background: "rgba(255,255,255,0.08)",
-          padding: "2px 8px",
-          borderRadius: "12px",
-          border: `1px solid ${player.color}66`
-        }}>
-          🎯 Click Die to Roll!
-        </div>
-      ) : (
-        <div style={{
-          fontSize: "0.75rem",
-          color: "var(--text-muted)",
-          marginTop: "0.25rem",
-          padding: "2px 8px"
-        }}>
-          {isActive ? "Thinking..." : "Waiting"}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ModeSelectionComponent({ onSelectMode }) {
-  const modes = [
-    {
-      id: "classic",
-      title: "Classic Mode 🎲",
-      description: "Play standard traditional Snake Ladder with classic rules and default board configurations.",
-      active: true,
-      badge: "Active"
-    },
-    {
-      id: "own-snake",
-      title: "Own-Snake Mode 👑",
-      description: "Each player custom-configures their own private immune snake. Land on your own snake for safety, or trap others!",
-      active: true,
-      badge: "Active"
-    },
-    {
-      id: "negative-snake",
-      title: "Negative Snake Mode 🐍",
-      description: "Snakes swallow you UP to higher cells, while ladders pull you DOWN! A complete inversion of the classic race.",
-      active: true,
-      badge: "Active"
-    },
-    {
-      id: "championship",
-      title: "Championship Mode 🏆",
-      description: "Ranked multiplayer with timed turns, hazard cells, and competitive match lobbies.",
-      active: false,
-      badge: "Coming Soon"
-    }
-  ];
-
-  return (
-    <div className="glass" style={{ maxWidth: "600px", width: "100%", padding: "2.5rem", borderRadius: "24px", marginTop: "2rem", textAlign: "center" }}>
-      <h1 className="title-glow" style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>Select Game Mode</h1>
-      <p style={{ color: "var(--text-muted)", marginBottom: "2rem" }}>Choose a game variation to start your tabletop adventure!</p>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-        {modes.map((m) => (
-          <div
-            key={m.id}
-            onClick={() => {
-              if (m.active) {
-                onSelectMode(m.id);
-              }
-            }}
-            style={{
-              padding: "1.5rem",
-              borderRadius: "16px",
-              background: m.active ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.02)",
-              border: m.active ? "1.5px solid var(--p1-color)" : "1.5px solid rgba(255,255,255,0.05)",
-              boxShadow: m.active ? "0 4px 20px rgba(244, 63, 94, 0.15)" : "none",
-              cursor: m.active ? "pointer" : "not-allowed",
-              textAlign: "left",
-              position: "relative",
-              transition: "all 0.3s ease",
-              opacity: m.active ? 1 : 0.6
-            }}
-            className={m.active ? "hover-scale" : ""}
-          >
-            {/* Status Badge */}
-            <span style={{
-              position: "absolute",
-              top: "1.5rem",
-              right: "1.5rem",
-              fontSize: "0.75rem",
-              fontWeight: "bold",
-              background: m.active ? "rgba(16, 185, 129, 0.15)" : "rgba(255,255,255,0.08)",
-              color: m.active ? "#10b981" : "var(--text-muted)",
-              padding: "4px 10px",
-              borderRadius: "12px",
-              border: m.active ? "1px solid #10b98166" : "1px solid rgba(255,255,255,0.1)"
-            }}>
-              {m.badge}
-            </span>
-
-            <h3 style={{ fontSize: "1.25rem", color: m.active ? "white" : "var(--text-muted)", marginBottom: "0.5rem" }}>
-              {m.title}
-            </h3>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", paddingRight: "6rem", lineHeight: "1.4" }}>
-              {m.description}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function App() {
   const [inGame, setInGame] = useState(() => {
@@ -432,6 +88,9 @@ export default function App() {
       return saved ? JSON.parse(saved) : "classic";
     } catch { return "classic"; }
   });
+  const [showRules, setShowRules] = useState(false);
+  const [rulesMode, setRulesMode] = useState("classic");
+
 
   // --- Online Multiplayer States ---
   const [isOnline, setIsOnline] = useState(() => {
@@ -527,9 +186,57 @@ export default function App() {
     }
   }, [inGame, players, board, currentTurnIndex, logs, diceValue, winner, gameMode, setupSnakesCount, setupLaddersCount, activeTheme, isOnline]);
 
+  const handleShowRules = (mode) => {
+    setRulesMode(mode || gameMode || "classic");
+    setShowRules(true);
+  };
+
+  const handleThemeChange = async (newTheme) => {
+    if (isOnline && !isHost) return; // Restrict theme change to room host/creator
+
+    setActiveTheme(newTheme);
+    localStorage.setItem("snake_game_activeTheme", JSON.stringify(newTheme));
+
+    const msg = `Theme changed to ${newTheme.toUpperCase()} 🎨`;
+    setLogs(prev => [msg, ...prev].slice(0, 5));
+
+    if (isOnline && gameCode) {
+      try {
+        // 1. Broadcast the theme-changed event for instant real-time sync
+        if (broadcastChannelRef.current) {
+          broadcastChannelRef.current.send({
+            type: "broadcast",
+            event: "theme-changed",
+            payload: { theme: newTheme }
+          });
+        }
+
+        // 2. Persist theme choice in database row so newly joined or refreshed users see it
+        const { data: game } = await supabase
+          .from("games")
+          .select("id, logs")
+          .eq("code", gameCode)
+          .single();
+
+        if (game) {
+          await supabase
+            .from("games")
+            .update({
+              theme: newTheme,
+              logs: [msg, ...(game.logs || [])].slice(0, 5)
+            })
+            .eq("id", game.id);
+        }
+      } catch (err) {
+        console.error("Failed to sync theme change to database:", err);
+      }
+    }
+  };
+
   const addLog = (msg) => {
     setLogs(prev => [msg, ...prev].slice(0, 5));
   };
+
 
   // --- Online Database Handlers ---
   const generateRoomCode = () => {
@@ -905,6 +612,12 @@ export default function App() {
         }
         if (isHost) {
           handleTimeoutTracking(payload.playerId, payload.isAutoRoll);
+        }
+      })
+      .on("broadcast", { event: "theme-changed" }, ({ payload }) => {
+        if (payload.theme) {
+          setActiveTheme(payload.theme);
+          setLogs(prev => [`Theme synced: ${payload.theme.toUpperCase()} 🎨`, ...prev.slice(0, 4)]);
         }
       })
       .subscribe();
@@ -1741,7 +1454,10 @@ export default function App() {
 
       {!inGame ? (
         gameMode === null ? (
-          <ModeSelectionComponent onSelectMode={(mode) => setGameMode(mode)} />
+          <ModeSelectionComponent 
+            onSelectMode={(mode) => setGameMode(mode)} 
+            onShowRules={handleShowRules}
+          />
         ) : (
           <LobbyComponent
             onStart={startGame}
@@ -1768,7 +1484,49 @@ export default function App() {
 
           {/* Game Board Tabletop Container */}
           <div style={{ flex: "1", minWidth: "300px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <h1 className="title-glow" style={{ fontSize: "2rem", marginBottom: "1.5rem" }}>Snake Ladder</h1>
+            <h1 className="title-glow" style={{ fontSize: "2rem", marginBottom: "0.25rem" }}>Snake Ladder</h1>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center", marginBottom: "1.5rem" }}>
+              <span style={{
+                fontSize: "0.8rem",
+                fontWeight: "bold",
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                padding: "4px 12px",
+                borderRadius: "16px",
+                color: "var(--text-muted)",
+                textTransform: "uppercase",
+                letterSpacing: "1px"
+              }}>
+                Mode: {gameMode === "classic" && "Classic Mode 🎲"}
+                {gameMode === "own-snake" && "Own-Snake Mode 👑"}
+                {gameMode === "negative-snake" && "Negative Snake Mode 🐍"}
+              </span>
+              <button
+                onClick={() => handleShowRules(gameMode)}
+                style={{
+                  fontSize: "0.75rem",
+                  background: "rgba(99, 102, 241, 0.15)",
+                  color: "var(--primary)",
+                  border: "1px solid rgba(99, 102, 241, 0.4)",
+                  padding: "3px 10px",
+                  borderRadius: "12px",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(99, 102, 241, 0.3)";
+                  e.currentTarget.style.transform = "scale(1.05)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(99, 102, 241, 0.15)";
+                  e.currentTarget.style.transform = "scale(1)";
+                }}
+              >
+                Rules 📖
+              </button>
+            </div>
+
 
             {/* Tabletop Layout with Board & Corner Cards */}
             <div className="tabletop-grid">
@@ -1892,6 +1650,58 @@ export default function App() {
                       </div>
                     </div>
 
+                    {/* Mobile In-Game Theme Selector */}
+                    <div className="glass" style={{ width: "100%", maxWidth: "340px", padding: "0.75rem 1rem", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.8rem", fontWeight: "bold", color: "var(--text-main)" }}>Board Theme 🎨</span>
+                        {isOnline && (
+                          <span style={{ fontSize: "0.65rem", background: isHost ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)", color: isHost ? "#10b981" : "#ef4444", padding: "1px 5px", borderRadius: "4px", fontWeight: "bold" }}>
+                            {isHost ? "Host" : "Guest"}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", gap: "0.35rem", width: "100%" }}>
+                        {Object.keys(THEME_CONFIGS).map((themeKey) => {
+                          const isSelected = activeTheme === themeKey;
+                          const isAllowed = !isOnline || isHost;
+                          return (
+                            <button
+                              key={themeKey}
+                              onClick={() => {
+                                if (isAllowed) {
+                                  handleThemeChange(themeKey);
+                                }
+                              }}
+                              disabled={!isAllowed}
+                              style={{
+                                flex: 1,
+                                padding: "6px 2px",
+                                fontSize: "0.75rem",
+                                borderRadius: "6px",
+                                border: isSelected ? "1.5px solid var(--p1-color)" : "1.5px solid rgba(255,255,255,0.1)",
+                                background: isSelected ? "var(--p1-color)" : "rgba(255,255,255,0.02)",
+                                color: isSelected ? "white" : "var(--text-muted)",
+                                cursor: isAllowed ? "pointer" : "not-allowed",
+                                opacity: isAllowed ? 1 : 0.45,
+                                transition: "all 0.2s ease"
+                              }}
+                            >
+                              {themeKey === "classic" && "🎲"}
+                              {themeKey === "neon" && "✨"}
+                              {themeKey === "forest" && "🌿"}
+                              {themeKey === "space" && "🌌"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {isOnline && !isHost && (
+                        <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textAlign: "center" }}>
+                          Only the host can change the theme.
+                        </div>
+                      )}
+                    </div>
+
+
                     <button
                       className="btn btn-outline"
                       onClick={() => {
@@ -1969,6 +1779,59 @@ export default function App() {
               </div>
             </div>
 
+            {/* In-Game Theme Selection */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <h3 style={{ color: "var(--text-muted)", marginBottom: "0.25rem", borderBottom: "1px solid var(--surface-light)", paddingBottom: "0.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span>Board Theme 🎨</span>
+                {isOnline && (
+                  <span style={{ fontSize: "0.7rem", background: isHost ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)", color: isHost ? "#10b981" : "#ef4444", padding: "2px 6px", borderRadius: "6px", border: isHost ? "1px solid #10b98144" : "1px solid #ef444444", fontWeight: "bold" }}>
+                    {isHost ? "Host" : "Guest (Read-Only)"}
+                  </span>
+                )}
+              </h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.5rem" }}>
+                {Object.keys(THEME_CONFIGS).map((themeKey) => {
+                  const isSelected = activeTheme === themeKey;
+                  const themeLabel = themeKey.charAt(0).toUpperCase() + themeKey.slice(1);
+                  const isAllowed = !isOnline || isHost;
+                  return (
+                    <button
+                      key={themeKey}
+                      onClick={() => {
+                        if (isAllowed) {
+                          handleThemeChange(themeKey);
+                        }
+                      }}
+                      disabled={!isAllowed}
+                      style={{
+                        padding: "8px 4px",
+                        fontSize: "0.8rem",
+                        borderRadius: "8px",
+                        border: isSelected ? "1.5px solid var(--p1-color)" : "1.5px solid rgba(255,255,255,0.15)",
+                        background: isSelected ? "var(--p1-color)" : "transparent",
+                        color: isSelected ? "white" : "var(--text-muted)",
+                        cursor: isAllowed ? "pointer" : "not-allowed",
+                        opacity: isAllowed ? 1 : 0.5,
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      {themeKey === "classic" && "🎲 "}
+                      {themeKey === "neon" && "✨ "}
+                      {themeKey === "forest" && "🌿 "}
+                      {themeKey === "space" && "🌌 "}
+                      {themeLabel}
+                    </button>
+                  );
+                })}
+              </div>
+              {isOnline && !isHost && (
+                <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textAlign: "center", marginTop: "2px" }}>
+                  Only the room creator can change the theme.
+                </div>
+              )}
+            </div>
+
+
             {/* Action Logs */}
             <div style={{ flex: 1, minHeight: "150px" }}>
               <h3 style={{ color: "var(--text-muted)", marginBottom: "0.5rem", borderBottom: "1px solid var(--surface-light)", paddingBottom: "0.5rem" }}>Game Log</h3>
@@ -2045,6 +1908,14 @@ export default function App() {
           </div>
         </div>
       )}
+      {/* Rules & Info Overlay Modal */}
+
+      <RulesModal
+        isOpen={showRules}
+        onClose={() => setShowRules(false)}
+        defaultMode={rulesMode}
+      />
     </main>
   );
 }
+
