@@ -658,14 +658,36 @@ export default function App() {
           setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, unlockAttempts: (p.unlockAttempts || 0) + 1, lastRoll: roll } : p));
           await new Promise(resolve => setTimeout(resolve, 600));
         }
+      } else if (gameMode === "beast-snakes" && startPos === targetPos) {
+        // Frozen: did not move
+        await new Promise(resolve => setTimeout(resolve, 600));
+      } else if (gameMode === "beast-snakes" && targetPos < startPos) {
+        // Walk backwards due to panic
+        for (let step = startPos - 1; step >= targetPos; step--) {
+          setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
+          await new Promise(resolve => setTimeout(resolve, 350));
+        }
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isWalking: false } : p));
+        currentPos = targetPos;
+        await new Promise(resolve => setTimeout(resolve, 400));
       } else {
-        if (startPos + roll <= 100) {
-          for (let step = startPos + 1; step <= startPos + roll; step++) {
+        // Walk forward
+        let walkDist = roll;
+        if (gameMode === "beast-snakes") {
+          const activePlayerObj = latestPlayers.find(p => p.id === playerId);
+          const unlockAttempts = activePlayerObj ? (activePlayerObj.unlockAttempts || 0) : 0;
+          if (unlockAttempts >= 200 && unlockAttempts <= 202) {
+            walkDist = Math.max(1, Math.floor(roll / 2));
+          }
+        }
+
+        if (startPos + walkDist <= 100) {
+          for (let step = startPos + 1; step <= startPos + walkDist; step++) {
             setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
             await new Promise(resolve => setTimeout(resolve, 350));
           }
           setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isWalking: false } : p));
-          currentPos = startPos + roll;
+          currentPos = startPos + walkDist;
           await new Promise(resolve => setTimeout(resolve, 400));
         }
       }
@@ -959,121 +981,76 @@ export default function App() {
     let logMsg = "";
     let boardElements = { type: "none" };
 
+    const outcome = calculateNewPosition(currentPos, roll, latestBoard, currentPlayer, gameMode);
+    const finalPos = outcome.position;
+    logMsg = outcome.message;
+    grantsAnotherTurn = outcome.grantsAnotherTurn;
+    updatedAttempts = outcome.updatedAttempts;
+
     if (currentPos === 0) {
       if (roll === 6) {
-        updatedAttempts = 0;
-        currentPos = 1;
-        logMsg = `Unlocked from home! You get another turn.`;
-        grantsAnotherTurn = true;
-
         setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: 1, unlockAttempts: 0, lastRoll: roll } : p));
         await new Promise(resolve => setTimeout(resolve, 600));
+        currentPos = 1;
       } else {
-        updatedAttempts += 1;
-        logMsg = `Rolled a ${roll}. Need a 6 to unlock from home.`;
-        
         setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, unlockAttempts: updatedAttempts, lastRoll: roll } : p));
         await new Promise(resolve => setTimeout(resolve, 600));
       }
+    } else if (gameMode === "beast-snakes" && finalPos === currentPos) {
+      // Frozen and did not roll a 6
+      setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, unlockAttempts: updatedAttempts, lastRoll: roll } : p));
+      await new Promise(resolve => setTimeout(resolve, 600));
+    } else if (gameMode === "beast-snakes" && outcome.message.includes("Panicked!")) {
+      // Walk backwards due to panic
+      for (let step = currentPos - 1; step >= finalPos; step--) {
+        setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
+        await new Promise(resolve => setTimeout(resolve, 350));
+      }
+      setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isWalking: false } : p));
+      currentPos = finalPos;
+      await new Promise(resolve => setTimeout(resolve, 400));
     } else {
-      const targetRollPos = currentPos + roll;
-      
-      if (targetRollPos > 100) {
-        logMsg = `Rolled a ${roll}. Need exact roll to reach 100. Cannot move.`;
-        setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, lastRoll: roll } : p));
-        await new Promise(resolve => setTimeout(resolve, 600));
-      } else {
-        for (let step = currentPos + 1; step <= targetRollPos; step++) {
+      // Normal walk forward (including poisoned halved rolls)
+      let walkDist = roll;
+      if (gameMode === "beast-snakes") {
+        const unlockAttempts = currentPlayer.unlockAttempts || 0;
+        if (unlockAttempts >= 200 && unlockAttempts <= 202) {
+          walkDist = Math.max(1, Math.floor(roll / 2));
+        }
+      }
+
+      const intermediatePos = currentPos + walkDist;
+
+      if (intermediatePos <= 100) {
+        for (let step = currentPos + 1; step <= intermediatePos; step++) {
           setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
           await new Promise(resolve => setTimeout(resolve, 350));
         }
-
         setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isWalking: false } : p));
-        currentPos = targetRollPos;
+        currentPos = intermediatePos;
         await new Promise(resolve => setTimeout(resolve, 400));
 
-        let hitLadder = null;
-        let hitSnake = null;
-
-        if (gameMode === "negative-snake") {
-          hitLadder = latestBoard.ladders.find(l => l.top === currentPos);
-          hitSnake = latestBoard.snakes.find(s => s.head === currentPos);
-        } else {
-          hitLadder = latestBoard.ladders.find(l => l.bottom === currentPos);
-          hitSnake = latestBoard.snakes.find(s => s.head === currentPos);
-        }
-
-        if (gameMode === "negative-snake") {
-          if (hitLadder) {
-            logMsg = `Rolled a ${roll}. Slid down a ladder from ${hitLadder.top} to ${hitLadder.bottom}!`;
-            boardElements = { type: "snake", tail: hitLadder.bottom };
-            
-            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: true } : p));
-            await new Promise(resolve => setTimeout(resolve, 750));
-
-            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: false, isSwallowed: true } : p));
-            await new Promise(resolve => setTimeout(resolve, 50));
-
-            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: hitLadder.bottom } : p));
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isSwallowed: false } : p));
-            currentPos = hitLadder.bottom;
-          } else if (hitSnake) {
-            logMsg = `Rolled a ${roll}. Swallowed UP by a supportive snake from ${hitSnake.head} to ${hitSnake.tail}!`;
-            boardElements = { type: "ladder", top: hitSnake.tail };
-
-            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: true } : p));
-            await new Promise(resolve => setTimeout(resolve, 50));
-
-            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: hitSnake.tail } : p));
-            await new Promise(resolve => setTimeout(resolve, 900));
-
-            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: false } : p));
-            currentPos = hitSnake.tail;
-          } else {
-            logMsg = `Rolled a ${roll}.`;
-          }
-        } else {
-          if (hitLadder) {
-            logMsg = `Rolled a ${roll}. Climbed a ladder from ${hitLadder.bottom} to ${hitLadder.top}!`;
-            boardElements = { type: "ladder", top: hitLadder.top };
-            
-            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: true } : p));
-            await new Promise(resolve => setTimeout(resolve, 50));
-
-            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: hitLadder.top } : p));
-            await new Promise(resolve => setTimeout(resolve, 900));
-
-            setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: false } : p));
-            currentPos = hitLadder.top;
-          } else if (hitSnake) {
-            if (gameMode === "own-snake" && currentPos === currentPlayer.ownSnakeNumber) {
-              logMsg = `Rolled a ${roll}. Landed on your OWN snake at ${hitSnake.head}! Immune!`;
-            } else {
-              logMsg = `Rolled a ${roll}. Bitten by a snake! Slide down from ${hitSnake.head} to ${hitSnake.tail}.`;
-              boardElements = { type: "snake", tail: hitSnake.tail };
-
-              setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: true } : p));
-              await new Promise(resolve => setTimeout(resolve, 750));
-
-              setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: false, isSwallowed: true } : p));
-              await new Promise(resolve => setTimeout(resolve, 50));
-
-              setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: hitSnake.tail } : p));
-              await new Promise(resolve => setTimeout(resolve, 1000));
-
-              setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isSwallowed: false } : p));
-              currentPos = hitSnake.tail;
-            }
-          } else {
-            logMsg = `Rolled a ${roll}.`;
-          }
-        }
-
-        if (roll === 6) {
-          grantsAnotherTurn = true;
-          logMsg += " Rolled a 6, so you get another turn!";
+        // Check for slides / climbs
+        if (finalPos > intermediatePos) {
+          // Climbing ladder
+          boardElements = { type: "ladder", top: finalPos };
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: true } : p));
+          await new Promise(resolve => setTimeout(resolve, 50));
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: finalPos } : p));
+          await new Promise(resolve => setTimeout(resolve, 900));
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: false } : p));
+          currentPos = finalPos;
+        } else if (finalPos < intermediatePos) {
+          // Sliding snake
+          boardElements = { type: "snake", tail: finalPos };
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: true } : p));
+          await new Promise(resolve => setTimeout(resolve, 750));
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: false, isSwallowed: true } : p));
+          await new Promise(resolve => setTimeout(resolve, 50));
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: finalPos } : p));
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isSwallowed: false } : p));
+          currentPos = finalPos;
         }
       }
     }
@@ -1500,6 +1477,7 @@ export default function App() {
                 Mode: {gameMode === "classic" && "Classic Mode 🎲"}
                 {gameMode === "own-snake" && "Own-Snake Mode 👑"}
                 {gameMode === "negative-snake" && "Negative Snake Mode 🐍"}
+                {gameMode === "beast-snakes" && "Beast-Snakes Mode 🦖"}
               </span>
               <button
                 onClick={() => handleShowRules(gameMode)}

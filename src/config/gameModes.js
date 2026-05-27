@@ -21,6 +21,13 @@ export const GAME_MODES = [
     badge: "Active"
   },
   {
+    id: "beast-snakes",
+    title: "Beast-Snakes Mode 🦖",
+    description: "Battle Anaconda, Python, Cobra, and Viper! Landing on them triggers unique status effects like Freezing, Poison, or Panic!",
+    active: true,
+    badge: "Active"
+  },
+  {
     id: "championship",
     title: "Championship Mode 🏆",
     description: "Ranked multiplayer with timed turns, hazard cells, and competitive match lobbies.",

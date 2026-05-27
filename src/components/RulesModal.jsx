@@ -29,6 +29,12 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
       title: "Negative Snake 🐍",
       color: "var(--p3-color)",
       glow: "rgba(16, 185, 129, 0.3)"
+    },
+    {
+      id: "beast-snakes",
+      title: "Beast-Snakes 🦖",
+      color: "#f43f5e",
+      glow: "rgba(244, 63, 94, 0.3)"
     }
   ];
 
@@ -145,6 +151,51 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
           </div>
         );
 
+      case "beast-snakes":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ background: "rgba(244, 63, 94, 0.1)", borderLeft: "4px solid #f43f5e", padding: "1rem", borderRadius: "8px" }}>
+              <strong style={{ color: "white", fontSize: "1.05rem" }}>Beast Snakes & Status Effects</strong>
+              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                Snakes have custom names and trigger distinct status effect penalties when you land on them!
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", color: "var(--text-main)", fontSize: "0.95rem" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#f43f5e" }}>🦖</span>
+                <div>
+                  <strong>Anaconda (Giant Snake):</strong> Head on 91-99, Tail on 5-15. Landing on it causes a massive, game-changing drop down the board!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#38bdf8" }}>❄️</span>
+                <div>
+                  <strong>Python (Freeze Snake):</strong> Slides you down and <strong>freezes</strong> you. You cannot move on your next turns unless you roll an exact <strong>6</strong>!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#22c55e" }}>🧪</span>
+                <div>
+                  <strong>Cobra (Poison Snake):</strong> Slides you down and <strong>poisons</strong> you for <strong>2 turns</strong>. While poisoned, your dice rolls are **halved**!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#fbbf24" }}>🌀</span>
+                <div>
+                  <strong>Viper (Panic Snake):</strong> Slides you down and <strong>panics</strong> you for 1 turn. While panicked, you walk <strong>backwards</strong> by your roll!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#ec4899" }}>🌈</span>
+                <div>
+                  <strong>Rainbow Boa (Blessed Snake):</strong> Head is on 15-35, Tail is on 60-80. Landing on it <strong>boosts you UP</strong> the board and awards you an <strong>extra roll</strong>!
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -183,15 +234,14 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
           width: "100%",
           maxWidth: "600px",
           borderRadius: "24px",
-          padding: "2rem",
+          padding: "1.5rem",
           display: "flex",
           flexDirection: "column",
-          gap: "1.5rem",
+          gap: "1.25rem",
           boxShadow: `0 20px 50px rgba(0, 0, 0, 0.4), 0 0 30px ${tabs.find(t => t.id === activeTab)?.glow || "rgba(255,255,255,0.05)"}`,
           animation: "scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
           transition: "box-shadow 0.3s ease",
-          maxHeight: "90vh",
-          overflowY: "auto",
+          maxHeight: "85vh",
           position: "relative"
         }}
       >
@@ -200,8 +250,8 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
           onClick={onClose}
           style={{
             position: "absolute",
-            top: "1.5rem",
-            right: "1.5rem",
+            top: "1.25rem",
+            right: "1.25rem",
             background: "rgba(255, 255, 255, 0.06)",
             border: "1px solid rgba(255, 255, 255, 0.1)",
             borderRadius: "50%",
@@ -229,8 +279,8 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
           ✕
         </button>
 
-        <div style={{ textAlign: "left" }}>
-          <h2 style={{ fontSize: "1.8rem", fontWeight: "800", color: "white", marginBottom: "0.25rem", background: "linear-gradient(to right, white, var(--text-muted))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+        <div style={{ textAlign: "left", paddingRight: "2.5rem" }}>
+          <h2 style={{ fontSize: "1.6rem", fontWeight: "800", color: "white", marginBottom: "0.25rem", background: "linear-gradient(to right, white, var(--text-muted))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
             Game Rules & Modes
           </h2>
           <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Learn about dynamic game rules, custom features, and inversions.</p>
@@ -243,7 +293,8 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
           background: "rgba(255,255,255,0.03)",
           padding: "4px",
           borderRadius: "12px",
-          border: "1px solid rgba(255,255,255,0.05)"
+          border: "1px solid rgba(255,255,255,0.05)",
+          flexShrink: 0
         }}>
           {tabs.map((tab) => {
             const isSelected = activeTab === tab.id;
@@ -253,9 +304,9 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
                 onClick={() => setActiveTab(tab.id)}
                 style={{
                   flex: 1,
-                  padding: "10px 6px",
+                  padding: "10px 4px",
                   borderRadius: "8px",
-                  fontSize: "0.85rem",
+                  fontSize: "0.8rem",
                   fontWeight: isSelected ? "bold" : "500",
                   cursor: "pointer",
                   border: "none",
@@ -271,14 +322,16 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
           })}
         </div>
 
-        {/* Active Tab Content Area */}
+        {/* Active Tab Content Area (Scrollable body, stays bound cleanly) */}
         <div style={{
           background: "rgba(255,255,255,0.02)",
           border: "1px solid rgba(255,255,255,0.05)",
           borderRadius: "16px",
           padding: "1.25rem",
           textAlign: "left",
-          minHeight: "200px"
+          overflowY: "auto",
+          flex: "1 1 auto",
+          minHeight: "150px"
         }}>
           {renderContent()}
         </div>
@@ -291,6 +344,7 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
             width: "100%",
             padding: "14px",
             borderRadius: "12px",
+            flexShrink: 0,
             background: `linear-gradient(135deg, ${tabs.find(t => t.id === activeTab)?.color || "var(--primary)"}, var(--secondary))`,
             boxShadow: `0 4px 15px ${tabs.find(t => t.id === activeTab)?.glow || "rgba(0,0,0,0.15)"}`
           }}

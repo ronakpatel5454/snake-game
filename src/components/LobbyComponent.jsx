@@ -33,9 +33,26 @@ export default function LobbyComponent({
   }, [initialTheme]);
 
   // Default parameters as currently used
-  const [numSnakes, setNumSnakes] = useState(3);
-  const [numLadders, setNumLadders] = useState(5);
+  const [numSnakes, setNumSnakes] = useState("3");
+  const [numLadders, setNumLadders] = useState("5");
   const [customBoardElements, setCustomBoardElements] = useState(false);
+
+  // Parse and compute validation errors in real-time
+  const minSnakes = gameMode === "beast-snakes" ? 0 : 3;
+  const numSnakesParsed = parseInt(numSnakes);
+  const numLaddersParsed = parseInt(numLadders);
+
+  const snakesError = isNaN(numSnakesParsed) || numSnakes.trim() === ""
+    ? "Please enter a valid number."
+    : numSnakesParsed < minSnakes || numSnakesParsed > 10
+      ? `Number of snakes must be between ${minSnakes} and 10.`
+      : null;
+
+  const laddersError = isNaN(numLaddersParsed) || numLadders.trim() === ""
+    ? "Please enter a valid number."
+    : numLaddersParsed < 0 || numLaddersParsed > 10
+      ? "Number of ladders must be between 0 and 10."
+      : null;
 
   // --- Online Mode States ---
   const [onlineTab, setOnlineTab] = useState("host"); // 'host' or 'join'
@@ -64,19 +81,11 @@ export default function LobbyComponent({
   }, [onlineName]);
 
   const handleSnakesChange = (val) => {
-    let num = parseInt(val);
-    if (isNaN(num)) num = 3;
-    if (num > 10) num = 10;
-    if (num < 3) num = 3;
-    setNumSnakes(num);
+    setNumSnakes(val);
   };
 
   const handleLaddersChange = (val) => {
-    let num = parseInt(val);
-    if (isNaN(num)) num = 0;
-    if (num > 10) num = 10;
-    if (num < 0) num = 0;
-    setNumLadders(num);
+    setNumLadders(val);
   };
 
   const handleModeChange = (single) => {
@@ -130,23 +139,28 @@ export default function LobbyComponent({
     }
 
     if (customBoardElements) {
-      if (numSnakes < 3 || numSnakes > 10) {
-        alert("Number of snakes must be between 3 and 10.");
+      if (snakesError) {
+        alert(snakesError);
         return;
       }
-      if (numLadders < 0 || numLadders > 10) {
-        alert("Number of ladders must be between 0 and 10.");
+      if (laddersError) {
+        alert(laddersError);
         return;
       }
     }
 
-    let finalSnakes = numSnakes;
-    let finalLadders = numLadders;
+    let finalSnakes = numSnakesParsed;
+    let finalLadders = numLaddersParsed;
 
     if (!customBoardElements) {
       if (gameMode !== "own-snake") {
-        finalSnakes = Math.floor(Math.random() * 3) + 5;
-        finalLadders = Math.floor(Math.random() * 4) + 3;
+        if (gameMode === "beast-snakes") {
+          finalSnakes = 3;
+          finalLadders = 5;
+        } else {
+          finalSnakes = Math.floor(Math.random() * 3) + 5;
+          finalLadders = Math.floor(Math.random() * 4) + 3;
+        }
       } else {
         finalSnakes = 3;
         finalLadders = 5;
@@ -177,14 +191,24 @@ export default function LobbyComponent({
       alert("Safe Snake head must be between 15 and 99.");
       return;
     }
+    if (customBoardElements) {
+      if (snakesError) {
+        alert(snakesError);
+        return;
+      }
+      if (laddersError) {
+        alert(laddersError);
+        return;
+      }
+    }
     onCreateOnlineRoom({
       hostName: onlineName,
       hostColor: onlineColor,
       hostSnake: onlineOwnSnake,
       theme: selectedTheme,
       customElements: customBoardElements,
-      snakesCount: numSnakes,
-      laddersCount: numLadders
+      snakesCount: numSnakesParsed,
+      laddersCount: numLaddersParsed
     });
   };
 
@@ -210,13 +234,29 @@ export default function LobbyComponent({
   };
 
   const handleStartOnline = () => {
-    let finalSnakes = numSnakes;
-    let finalLadders = numLadders;
+    if (customBoardElements) {
+      if (snakesError) {
+        alert(snakesError);
+        return;
+      }
+      if (laddersError) {
+        alert(laddersError);
+        return;
+      }
+    }
+
+    let finalSnakes = numSnakesParsed;
+    let finalLadders = numLaddersParsed;
 
     if (!customBoardElements) {
       if (gameMode !== "own-snake") {
-        finalSnakes = Math.floor(Math.random() * 3) + 5;
-        finalLadders = Math.floor(Math.random() * 4) + 3;
+        if (gameMode === "beast-snakes") {
+          finalSnakes = 3;
+          finalLadders = 5;
+        } else {
+          finalSnakes = Math.floor(Math.random() * 3) + 5;
+          finalLadders = Math.floor(Math.random() * 4) + 3;
+        }
       } else {
         finalSnakes = 3;
         finalLadders = 5;
@@ -714,15 +754,43 @@ export default function LobbyComponent({
             <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem", flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 200px" }}>
                 <label style={{ display: "block", marginBottom: "0.5rem", color: "var(--text-muted)", fontSize: "0.9rem" }}>
-                  Number of Snakes (3 - 10)
+                  {gameMode === "beast-snakes" ? "Number of Grass Snakes (0 - 10)" : "Number of Snakes (3 - 10)"}
                 </label>
-                <input type="number" min="3" max="10" value={numSnakes} onChange={(e) => handleSnakesChange(e.target.value)} style={{ width: "100%" }} />
+                <input 
+                  type="number" 
+                  value={numSnakes} 
+                  onChange={(e) => handleSnakesChange(e.target.value)} 
+                  style={{ 
+                    width: "100%", 
+                    borderColor: snakesError ? "#ef4444" : "rgba(255,255,255,0.15)",
+                    outlineColor: snakesError ? "#ef4444" : "transparent"
+                  }} 
+                />
+                {snakesError && (
+                  <div style={{ color: "#ef4444", fontSize: "0.8rem", marginTop: "0.35rem", fontWeight: "500" }}>
+                    ⚠️ {snakesError}
+                  </div>
+                )}
               </div>
               <div style={{ flex: "1 1 200px" }}>
                 <label style={{ display: "block", marginBottom: "0.5rem", color: "var(--text-muted)", fontSize: "0.9rem" }}>
                   Number of Ladders (0 - 10)
                 </label>
-                <input type="number" min="0" max="10" value={numLadders} onChange={(e) => handleLaddersChange(e.target.value)} style={{ width: "100%" }} />
+                <input 
+                  type="number" 
+                  value={numLadders} 
+                  onChange={(e) => handleLaddersChange(e.target.value)} 
+                  style={{ 
+                    width: "100%", 
+                    borderColor: laddersError ? "#ef4444" : "rgba(255,255,255,0.15)",
+                    outlineColor: laddersError ? "#ef4444" : "transparent"
+                  }} 
+                />
+                {laddersError && (
+                  <div style={{ color: "#ef4444", fontSize: "0.8rem", marginTop: "0.35rem", fontWeight: "500" }}>
+                    ⚠️ {laddersError}
+                  </div>
+                )}
               </div>
             </div>
           )}
