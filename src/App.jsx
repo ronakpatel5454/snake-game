@@ -1,4 +1,41 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Component } from "react";
+
+// --- Error Boundary: catches React render crashes and shows error instead of blank page ---
+class LudoErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, info) {
+    console.error("[Ludo] Render error caught:", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="glass" style={{ maxWidth: "600px", width: "100%", padding: "2rem", borderRadius: "16px", textAlign: "center", marginTop: "2rem" }}>
+          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>⚠️</div>
+          <h2 style={{ color: "#ef4444", marginBottom: "0.5rem" }}>Game Error</h2>
+          <p style={{ color: "var(--text-muted)", marginBottom: "1.5rem", fontSize: "0.9rem" }}>
+            {this.state.error?.message || "An unexpected error occurred."}
+          </p>
+          <button
+            className="btn"
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              if (this.props.onReset) this.props.onReset();
+            }}
+          >
+            Back to Game Selection 🏠
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import GameBoardComponent from "./components/GameBoardComponent";
 import LobbyComponent from "./components/LobbyComponent";
 import { generateBoard, rollDice, calculateNewPosition } from "./lib/gameLogic";
@@ -8,6 +45,10 @@ import ModeSelectionComponent from "./components/ModeSelectionComponent";
 import Premium3DDice from "./components/Premium3DDice";
 import { THEME_CONFIGS } from "./config/themeConfigs";
 import RulesModal from "./components/RulesModal";
+import GameSelectionComponent from "./components/GameSelectionComponent";
+import LudoLobbyComponent from "./components/LudoLobbyComponent";
+import LudoBoardComponent from "./components/LudoBoardComponent";
+import { getLegalMoves, executeLudoMove, getBotAIMove } from "./lib/ludoLogic";
 
 const getClientPlayerId = () => {
   let id = localStorage.getItem("snake_game_client_player_id");
@@ -26,6 +67,133 @@ export default function App() {
       return saved ? JSON.parse(saved) : false;
     } catch { return false; }
   });
+
+  // --- Game Selection Portal ---
+  const [activeGame, setActiveGame] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_activeGame");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
+  // --- Ludo Game States ---
+  const [ludoPlayers, setLudoPlayers] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_ludoPlayers");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [ludoCurrentTurnIndex, setLudoCurrentTurnIndex] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_ludoCurrentTurnIndex");
+      return saved ? JSON.parse(saved) : 0;
+    } catch { return 0; }
+  });
+  const [ludoLogs, setLudoLogs] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_ludoLogs");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [ludoDiceValue, setLudoDiceValue] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_ludoDiceValue");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+  const [ludoIsRolling, setLudoIsRolling] = useState(false);
+  const [ludoIsDiceRolling, setLudoIsDiceRolling] = useState(false);
+  const [ludoWinner, setLudoWinner] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_ludoWinner");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+  const [ludoVariation, setLudoVariation] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_ludoVariation");
+      return saved ? JSON.parse(saved) : "ludo-classic";
+    } catch { return "ludo-classic"; }
+  });
+  const [ludoLegalMoves, setLudoLegalMoves] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_ludoLegalMoves");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [ludoConsecutiveSixes, setLudoConsecutiveSixes] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_ludoConsecutiveSixes");
+      return saved ? JSON.parse(saved) : 0;
+    } catch { return 0; }
+  });
+
+  // --- Dedicated Ludo routing state (avoids sharing inGame with Snake & Ladders) ---
+  // Values: "lobby" | "playing"
+  const [ludoGamePhase, setLudoGamePhase] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_ludoGamePhase");
+      return saved ? JSON.parse(saved) : "lobby";
+    } catch { return "lobby"; }
+  });
+
+  const [ludoWalkingToken, setLudoWalkingToken] = useState(null);
+
+  // Keep refs up-to-date to completely prevent stale closures in async timeouts
+  const ludoPlayersRef = useRef(ludoPlayers);
+  const ludoActivePlayerIdxRef = useRef(ludoCurrentTurnIndex);
+  const ludoIsRollingRef = useRef(ludoIsRolling);
+  const ludoIsDiceRollingRef = useRef(ludoIsDiceRolling);
+  const ludoDiceValueRef = useRef(ludoDiceValue);
+  const ludoLegalMovesRef = useRef(ludoLegalMoves);
+  const ludoConsecutiveSixesRef = useRef(ludoConsecutiveSixes);
+
+  useEffect(() => {
+    ludoPlayersRef.current = ludoPlayers;
+  }, [ludoPlayers]);
+
+  useEffect(() => {
+    ludoActivePlayerIdxRef.current = ludoCurrentTurnIndex;
+  }, [ludoCurrentTurnIndex]);
+
+  useEffect(() => {
+    ludoIsRollingRef.current = ludoIsRolling;
+  }, [ludoIsRolling]);
+
+  useEffect(() => {
+    ludoIsDiceRollingRef.current = ludoIsDiceRolling;
+  }, [ludoIsDiceRolling]);
+
+  useEffect(() => {
+    ludoDiceValueRef.current = ludoDiceValue;
+  }, [ludoDiceValue]);
+
+  useEffect(() => {
+    ludoLegalMovesRef.current = ludoLegalMoves;
+  }, [ludoLegalMoves]);
+
+  useEffect(() => {
+    ludoConsecutiveSixesRef.current = ludoConsecutiveSixes;
+  }, [ludoConsecutiveSixes]);
+
+  // Sync Ludo states to localStorage to support page refresh/recovery
+  useEffect(() => {
+    try {
+      localStorage.setItem("snake_game_activeGame", JSON.stringify(activeGame));
+      localStorage.setItem("snake_game_ludoPlayers", JSON.stringify(ludoPlayers));
+      localStorage.setItem("snake_game_ludoCurrentTurnIndex", JSON.stringify(ludoCurrentTurnIndex));
+      localStorage.setItem("snake_game_ludoLogs", JSON.stringify(ludoLogs));
+      localStorage.setItem("snake_game_ludoDiceValue", JSON.stringify(ludoDiceValue));
+      localStorage.setItem("snake_game_ludoWinner", JSON.stringify(ludoWinner));
+      localStorage.setItem("snake_game_ludoVariation", JSON.stringify(ludoVariation));
+      localStorage.setItem("snake_game_ludoLegalMoves", JSON.stringify(ludoLegalMoves));
+      localStorage.setItem("snake_game_ludoConsecutiveSixes", JSON.stringify(ludoConsecutiveSixes));
+      localStorage.setItem("snake_game_ludoGamePhase", JSON.stringify(ludoGamePhase));
+    } catch (e) {
+      console.error("Failed to save ludo state to localStorage", e);
+    }
+  }, [activeGame, ludoPlayers, ludoCurrentTurnIndex, ludoLogs, ludoDiceValue, ludoWinner, ludoVariation, ludoLegalMoves, ludoConsecutiveSixes, ludoGamePhase]);
+
   const [players, setPlayers] = useState(() => {
     try {
       const saved = localStorage.getItem("snake_game_players");
@@ -426,6 +594,19 @@ export default function App() {
       setLogs([]);
       setDiceValue(null);
       setGameMode(null);
+
+      // Reset Ludo states too
+      setLudoPlayers([]);
+      setLudoCurrentTurnIndex(0);
+      setLudoDiceValue(null);
+      setLudoWinner(null);
+      setLudoLogs([]);
+      setLudoLegalMoves([]);
+      setLudoConsecutiveSixes(0);
+      setLudoGamePhase("lobby"); // Reset Ludo routing phase
+
+      // Go back to main Game Selection
+      setActiveGame(null);
     }
   };
 
@@ -712,6 +893,212 @@ export default function App() {
     } finally {
       setIsRolling(false);
       setIsDiceRolling(false);
+    }
+  };
+
+  // --- Ludo Game Control Actions ---
+  const startLudoGame = (setupPlayers, selectedVariation, selectedTheme) => {
+    if (!setupPlayers || setupPlayers.length === 0) {
+      console.error("[Ludo] startLudoGame called with no players!");
+      return;
+    }
+    setLudoPlayers(setupPlayers);
+    setLudoVariation(selectedVariation);
+    setActiveTheme(selectedTheme);
+    setLudoCurrentTurnIndex(0);
+    setLudoDiceValue(null);
+    setLudoWinner(null);
+    setLudoLogs(["Game started! Let the race begin! 🚀"]);
+    setLudoLegalMoves([]);
+    setLudoConsecutiveSixes(0);
+    setLudoGamePhase("playing"); // ← dedicated Ludo routing, NOT shared inGame
+
+    // Auto-roll if Player 1 is bot (unlikely but always safe to check)
+    if (setupPlayers[0]?.isBot) {
+      setTimeout(() => {
+        handleLudoRoll();
+      }, 1500);
+    }
+  };
+
+  const restartLudoGame = () => {
+    const numTokens = ludoVariation === "ludo-quick" ? 1 : 4;
+    const resetPlayers = ludoPlayers.map((p) => ({
+      ...p,
+      tokens: Array(numTokens).fill(-1),
+      hasEliminatedOpponent: false,
+      lastRoll: 1
+    }));
+
+    setLudoPlayers(resetPlayers);
+    setLudoCurrentTurnIndex(0);
+    setLudoDiceValue(null);
+    setLudoWinner(null);
+    setLudoLogs(["Game restarted! Let the race begin! 🚀"]);
+    setLudoLegalMoves([]);
+    setLudoConsecutiveSixes(0);
+    setLudoGamePhase("playing");
+
+    if (resetPlayers[0]?.isBot) {
+      setTimeout(() => {
+        handleLudoRoll();
+      }, 1500);
+    }
+  };
+
+  const passLudoTurn = (freshPlayers, activeIdx) => {
+    const nextIdx = (activeIdx + 1) % freshPlayers.length;
+    setLudoCurrentTurnIndex(nextIdx);
+    setLudoDiceValue(null);
+    setLudoLegalMoves([]);
+    setLudoConsecutiveSixes(0);
+
+    const nextPlayer = freshPlayers[nextIdx];
+    if (nextPlayer.isBot && !ludoWinner) {
+      setTimeout(() => {
+        handleLudoRoll();
+      }, 1500);
+    }
+  };
+
+  const handleLudoRoll = async () => {
+    if (ludoIsRollingRef.current || ludoIsDiceRollingRef.current || ludoWinner || ludoDiceValue !== null) return;
+
+    setLudoIsRolling(true);
+    setLudoIsDiceRolling(true);
+
+    const activeIdx = ludoActivePlayerIdxRef.current;
+    const activePlayer = ludoPlayersRef.current[activeIdx];
+    const roll = Math.floor(Math.random() * 6) + 1;
+
+    // Update lastRoll immediately so the 3D dice has the target value before spinning!
+    const freshPlayers = ludoPlayersRef.current.map((p, idx) => 
+      idx === activeIdx ? { ...p, lastRoll: roll } : p
+    );
+    setLudoPlayers(freshPlayers);
+
+    // Simulate dice roll animation
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    setLudoIsDiceRolling(false);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    setLudoDiceValue(roll);
+
+    const legals = getLegalMoves(freshPlayers, activeIdx, roll, ludoVariation);
+    setLudoLegalMoves(legals);
+
+    const updatedConsecutiveSixes = roll === 6 ? ludoConsecutiveSixesRef.current + 1 : 0;
+    setLudoConsecutiveSixes(updatedConsecutiveSixes);
+
+    const logMsg = `${activePlayer.name} rolled a ${roll}! 🎲`;
+    setLudoLogs((prev) => [logMsg, ...prev].slice(0, 5));
+
+    if (updatedConsecutiveSixes === 3) {
+      const skipMsg = `⚠️ 3 consecutive sixes! ${activePlayer.name}'s turn is skipped.`;
+      setLudoLogs((prev) => [skipMsg, logMsg, ...prev].slice(0, 5));
+      setLudoConsecutiveSixes(0);
+      setLudoLegalMoves([]);
+      setLudoIsRolling(false);
+      setTimeout(() => {
+        passLudoTurn(freshPlayers, activeIdx);
+      }, 1500);
+      return;
+    }
+
+    if (legals.length === 0) {
+      const noMoveMsg = `No legal moves for ${activePlayer.name}. Turn passes!`;
+      setLudoLogs((prev) => [noMoveMsg, ...prev].slice(0, 5));
+      setLudoIsRolling(false);
+
+      setTimeout(() => {
+        passLudoTurn(freshPlayers, activeIdx);
+      }, 1500);
+    } else {
+      setLudoIsRolling(false);
+
+      if (activePlayer.isBot) {
+        setTimeout(() => {
+          const botPlayers = freshPlayers;
+          const bestTokenIdx = getBotAIMove(botPlayers, activeIdx, legals, roll, ludoVariation);
+          handleSelectLudoToken(botPlayers, activeIdx, bestTokenIdx, roll);
+        }, 1000);
+      }
+    }
+  };
+
+  const handleSelectLudoToken = async (playersList, activeIdx, tokenIdx, rollVal) => {
+    if (ludoIsRollingRef.current || ludoWinner) return;
+    setLudoIsRolling(true);
+
+    const activePlayer = playersList[activeIdx];
+    const currentStep = activePlayer.tokens[tokenIdx];
+    const targetStep = currentStep === -1 ? 0 : currentStep + rollVal;
+
+    // Set walking token state so the board can animate it
+    setLudoWalkingToken({ playerIdx: activeIdx, tokenIdx: tokenIdx });
+
+    // Incremental step-by-step walking animation
+    let tempPlayers = JSON.parse(JSON.stringify(playersList));
+    if (currentStep === -1) {
+      // 1. Release from base
+      tempPlayers[activeIdx].tokens[tokenIdx] = 0;
+      setLudoPlayers(tempPlayers);
+      setLudoLogs((prev) => [`${activePlayer.name} released a token to the track! 🚀`, ...prev].slice(0, 5));
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    } else {
+      // 2. Walk forward cell-by-cell
+      for (let s = currentStep + 1; s <= targetStep; s++) {
+        tempPlayers[activeIdx].tokens[tokenIdx] = s;
+        setLudoPlayers(tempPlayers);
+        await new Promise((resolve) => setTimeout(resolve, 260)); // 260ms walking speed per cell
+      }
+    }
+
+    // Clear walking token animation state
+    setLudoWalkingToken(null);
+
+    // Compute clashing and victory rules on the original state list
+    const { players: updatedPlayers, logs: moveLogs, extraRoll } = executeLudoMove(
+      playersList,
+      activeIdx,
+      tokenIdx,
+      rollVal,
+      ludoVariation
+    );
+
+    setLudoPlayers(updatedPlayers);
+    setLudoLogs((prev) => [...moveLogs, ...prev].slice(0, 5));
+    setLudoLegalMoves([]);
+
+    const activePlayerFinal = updatedPlayers[activeIdx];
+    const hasWon = ludoVariation === "ludo-quick"
+      ? activePlayerFinal.tokens.some((step) => step === 56)
+      : activePlayerFinal.tokens.every((step) => step === 56);
+
+    if (hasWon) {
+      setLudoWinner(activePlayerFinal);
+      const winMsg = `🏆 ${activePlayerFinal.name} has won Ludo Royale! 🏆`;
+      setLudoLogs((prev) => [winMsg, ...prev].slice(0, 5));
+      setLudoIsRolling(false);
+      return;
+    }
+
+    const getsAnotherRoll = (rollVal === 6 || extraRoll) && ludoConsecutiveSixesRef.current < 3;
+
+    setLudoIsRolling(false);
+
+    if (getsAnotherRoll) {
+      const extraMsg = `${activePlayerFinal.name} gets another roll! 🔄`;
+      setLudoLogs((prev) => [extraMsg, ...prev].slice(0, 5));
+      setLudoDiceValue(null); // Reset dice value to null so the extra turn roll is allowed!
+
+      if (activePlayerFinal.isBot) {
+        setTimeout(() => {
+          handleLudoRoll();
+        }, 1500);
+      }
+    } else {
+      passLudoTurn(updatedPlayers, activeIdx);
     }
   };
 
@@ -1145,6 +1532,38 @@ export default function App() {
     }
   }, [inGame, winner, currentTurnIndex, isRolling]);
 
+  // Automated Ludo Bot Roll and Move triggers (Robust sync loop completely solves bot stuck/AFK bugs)
+  useEffect(() => {
+    if (ludoGamePhase !== "playing" || ludoWinner) return;
+
+    const latestPlayers = ludoPlayersRef.current;
+    if (latestPlayers.length === 0) return;
+
+    const activeIdx = ludoCurrentTurnIndex;
+    const activePlayer = latestPlayers[activeIdx];
+    if (!activePlayer || !activePlayer.isBot) return;
+
+    // Bot needs to ROLL the dice
+    if (ludoDiceValue === null && !ludoIsRolling && !ludoIsDiceRolling) {
+      const timer = setTimeout(() => {
+        handleLudoRoll();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+
+    // Bot needs to MOVE a token
+    if (ludoDiceValue !== null && !ludoIsRolling && !ludoIsDiceRolling) {
+      const legals = getLegalMoves(latestPlayers, activeIdx, ludoDiceValue, ludoVariation);
+      if (legals.length > 0) {
+        const timer = setTimeout(() => {
+          const bestTokenIdx = getBotAIMove(latestPlayers, activeIdx, legals, ludoDiceValue, ludoVariation);
+          handleSelectLudoToken(latestPlayers, activeIdx, bestTokenIdx, ludoDiceValue);
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [ludoGamePhase, ludoWinner, ludoCurrentTurnIndex, ludoDiceValue, ludoIsRolling, ludoIsDiceRolling]);
+
   // Auto-play timer for online multi-device games
   useEffect(() => {
     if (!inGame || winner || isRolling || isDiceRolling || !isOnline) return;
@@ -1429,424 +1848,473 @@ export default function App() {
         }
       `}</style>
 
-      {!inGame ? (
-        gameMode === null ? (
-          <ModeSelectionComponent 
-            onSelectMode={(mode) => setGameMode(mode)} 
-            onShowRules={handleShowRules}
-          />
+      {activeGame === null ? (
+              <GameSelectionComponent
+          onSelectGame={(game) => {
+            setActiveGame(game);
+            if (game === "ludo") {
+              // Reset ALL Ludo state cleanly — prevents stale localStorage board renders
+              setLudoPlayers([]);
+              setLudoCurrentTurnIndex(0);
+              setLudoDiceValue(null);
+              setLudoWinner(null);
+              setLudoLogs([]);
+              setLudoLegalMoves([]);
+              setLudoConsecutiveSixes(0);
+              setLudoGamePhase("lobby"); // Always start at lobby
+            } else {
+              setGameMode(null);
+              setInGame(false);
+            }
+          }}
+          onShowGeneralRules={handleShowRules}
+        />
+      ) : activeGame === "snake-ladder" ? (
+        !inGame ? (
+          gameMode === null ? (
+            <ModeSelectionComponent 
+              onSelectMode={(mode) => setGameMode(mode)} 
+              onShowRules={handleShowRules}
+              onBack={() => setActiveGame(null)}
+            />
+          ) : (
+            <LobbyComponent
+              onStart={startGame}
+              onBack={() => setGameMode(null)}
+              gameMode={gameMode}
+              initialTheme={activeTheme}
+              onlineState={{
+                isOnline,
+                gameCode,
+                joinedPlayers,
+                isHost,
+                myPlayerId,
+                isConnecting
+              }}
+              onCreateOnlineRoom={handleCreateOnlineRoom}
+              onJoinOnlineRoom={handleJoinOnlineRoom}
+              onStartOnlineGame={handleStartOnlineGame}
+              onLeaveOnlineRoom={handleLeaveOnlineRoom}
+              onToggleOnlineMode={setIsOnline}
+            />
+          )
         ) : (
-          <LobbyComponent
-            onStart={startGame}
-            onBack={() => setGameMode(null)}
-            gameMode={gameMode}
-            initialTheme={activeTheme}
-            onlineState={{
-              isOnline,
-              gameCode,
-              joinedPlayers,
-              isHost,
-              myPlayerId,
-              isConnecting
-            }}
-            onCreateOnlineRoom={handleCreateOnlineRoom}
-            onJoinOnlineRoom={handleJoinOnlineRoom}
-            onStartOnlineGame={handleStartOnlineGame}
-            onLeaveOnlineRoom={handleLeaveOnlineRoom}
-            onToggleOnlineMode={setIsOnline}
-          />
-        )
-      ) : (
-        <div style={{ display: "flex", gap: "2rem", width: "100%", maxWidth: "1250px", flexWrap: "wrap", justifyContent: "center" }}>
+          <div style={{ display: "flex", gap: "2rem", width: "100%", maxWidth: "1250px", flexWrap: "wrap", justifyContent: "center" }}>
 
-          {/* Game Board Tabletop Container */}
-          <div style={{ flex: "1", minWidth: "300px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <h1 className="title-glow" style={{ fontSize: "2rem", marginBottom: "0.25rem" }}>Snake Ladder</h1>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center", marginBottom: "1.5rem" }}>
-              <span style={{
-                fontSize: "0.8rem",
-                fontWeight: "bold",
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                padding: "4px 12px",
-                borderRadius: "16px",
-                color: "var(--text-muted)",
-                textTransform: "uppercase",
-                letterSpacing: "1px"
-              }}>
-                Mode: {gameMode === "classic" && "Classic Mode 🎲"}
-                {gameMode === "own-snake" && "Own-Snake Mode 👑"}
-                {gameMode === "negative-snake" && "Negative Snake Mode 🐍"}
-                {gameMode === "beast-snakes" && "Beast-Snakes Mode 🦖"}
-              </span>
-              <button
-                onClick={() => handleShowRules(gameMode)}
-                style={{
-                  fontSize: "0.75rem",
-                  background: "rgba(99, 102, 241, 0.15)",
-                  color: "var(--primary)",
-                  border: "1px solid rgba(99, 102, 241, 0.4)",
-                  padding: "3px 10px",
-                  borderRadius: "12px",
-                  cursor: "pointer",
+            {/* Game Board Tabletop Container */}
+            <div style={{ flex: "1", minWidth: "300px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <h1 className="title-glow" style={{ fontSize: "2rem", marginBottom: "0.25rem" }}>Snake Ladder</h1>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center", marginBottom: "1.5rem" }}>
+                <span style={{
+                  fontSize: "0.8rem",
                   fontWeight: "bold",
-                  transition: "all 0.2s"
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(99, 102, 241, 0.3)";
-                  e.currentTarget.style.transform = "scale(1.05)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(99, 102, 241, 0.15)";
-                  e.currentTarget.style.transform = "scale(1)";
-                }}
-              >
-                Rules 📖
-              </button>
-            </div>
-
-
-            {/* Tabletop Layout with Board & Corner Cards */}
-            <div className="tabletop-grid">
-
-              {/* Left Column (P1 Top, P3 Bottom) */}
-              <div className="tabletop-column desktop-only">
-                <PlayerCornerCard
-                  player={players[0]}
-                  isActive={currentTurnIndex === 0}
-                  isRolling={isRolling}
-                  isDiceRolling={isDiceRolling}
-                  onRoll={handleRoll}
-                  theme={activeTheme}
-                />
-                <PlayerCornerCard
-                  player={players[2]}
-                  isActive={currentTurnIndex === 2}
-                  isRolling={isRolling}
-                  isDiceRolling={isDiceRolling}
-                  onRoll={handleRoll}
-                  theme={activeTheme}
-                />
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  padding: "4px 12px",
+                  borderRadius: "16px",
+                  color: "var(--text-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "1px"
+                }}>
+                  Mode: {gameMode === "classic" && "Classic Mode 🎲"}
+                  {gameMode === "own-snake" && "Own-Snake Mode 👑"}
+                  {gameMode === "negative-snake" && "Negative Snake Mode 🐍"}
+                  {gameMode === "beast-snakes" && "Beast-Snakes Mode 🦖"}
+                </span>
+                <button
+                  onClick={() => handleShowRules(gameMode)}
+                  style={{
+                    fontSize: "0.75rem",
+                    background: "rgba(99, 102, 241, 0.15)",
+                    color: "var(--primary)",
+                    border: "1px solid rgba(99, 102, 241, 0.4)",
+                    padding: "3px 10px",
+                    borderRadius: "12px",
+                    cursor: "pointer",
+                    fontWeight: "bold",
+                    transition: "all 0.2s"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(99, 102, 241, 0.3)";
+                    e.currentTarget.style.transform = "scale(1.05)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(99, 102, 241, 0.15)";
+                    e.currentTarget.style.transform = "scale(1)";
+                  }}
+                >
+                  Rules 📖
+                </button>
               </div>
 
-              {/* Center Column (GameBoard Component) */}
-              <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", width: "100%", maxWidth: "550px", margin: "0 auto" }}>
-                
-                {/* Mobile Players Row (above board) */}
-                {board && (
-                  <div className="mobile-only" style={{ width: "100%", justifyContent: "center", gap: "6px", marginBottom: "1rem", flexWrap: "wrap" }}>
-                    {players.map((p, idx) => {
-                      const isActive = idx === currentTurnIndex;
-                      return (
-                        <div
-                          key={p.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "6px 12px",
-                            borderRadius: "20px",
-                            background: isActive ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)",
-                            border: isActive ? `1.5px solid ${p.color}` : "1.5px solid rgba(255,255,255,0.05)",
-                            boxShadow: isActive ? `0 0 10px ${p.color}44` : "none",
-                            transform: isActive ? "scale(1.05)" : "scale(1)",
-                            transition: "all 0.2s ease"
-                          }}
-                        >
-                          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: p.color }} />
-                          <span style={{ fontSize: "0.75rem", fontWeight: isActive ? "bold" : "normal", color: isActive ? "white" : "var(--text-muted)" }}>
-                            {p.name}: {p.position}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+              {/* Tabletop Layout with Board & Corner Cards */}
+              <div className="tabletop-grid">
 
-                {board && <GameBoardComponent board={board} players={players} gameMode={gameMode} theme={activeTheme} />}
+                {/* Left Column (P1 Top, P3 Bottom) */}
+                <div className="tabletop-column desktop-only">
+                  <PlayerCornerCard
+                    player={players[0]}
+                    isActive={currentTurnIndex === 0}
+                    isRolling={isRolling}
+                    isDiceRolling={isDiceRolling}
+                    onRoll={handleRoll}
+                    theme={activeTheme}
+                  />
+                  <PlayerCornerCard
+                    player={players[2]}
+                    isActive={currentTurnIndex === 2}
+                    isRolling={isRolling}
+                    isDiceRolling={isDiceRolling}
+                    onRoll={handleRoll}
+                    theme={activeTheme}
+                  />
+                </div>
 
-                {/* Mobile Active Player Panel & Controls (below board) */}
-                {board && (
-                  <div className="mobile-only" style={{ width: "100%", flexDirection: "column", alignItems: "center", gap: "0.75rem", marginTop: "1rem" }}>
-                    
-                    {/* Compact Roll Card & Dice */}
-                    <div 
-                      className="glass" 
-                      style={{ 
-                        width: "100%", 
-                        maxWidth: "340px", 
-                        padding: "0.75rem 1rem", 
-                        borderRadius: "16px",
-                        display: "flex", 
-                        alignItems: "center", 
-                        justifyContent: "space-between",
-                        border: `1.5px solid ${players[currentTurnIndex]?.color}88`,
-                        boxShadow: `0 0 15px ${players[currentTurnIndex]?.color}22`
-                      }}
-                    >
-                      <div style={{ display: "flex", flexDirection: "column", gap: "2px", textAlign: "left" }}>
-                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Active Turn</div>
-                        <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: players[currentTurnIndex]?.color }}>
-                          {players[currentTurnIndex]?.name} {players[currentTurnIndex]?.isBot && "🤖"}
-                        </div>
-                        {players[currentTurnIndex]?.isBot ? (
-                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", animation: "pulse 1.5s infinite" }}>🤖 Thinking...</div>
-                        ) : (
-                          <div style={{ fontSize: "0.75rem", fontWeight: "bold", color: players[currentTurnIndex]?.color, animation: "pulse 1.5s infinite" }}>🎯 Tap Die to Roll!</div>
-                        )}
-                      </div>
+                {/* Center Column (GameBoard Component) */}
+                <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", width: "100%", maxWidth: "550px", margin: "0 auto" }}>
+                  
+                  {/* Mobile Players Row (above board) */}
+                  {board && (
+                    <div className="mobile-only" style={{ width: "100%", justifyContent: "center", gap: "6px", marginBottom: "1rem", flexWrap: "wrap" }}>
+                      {players.map((p, idx) => {
+                        const isActive = idx === currentTurnIndex;
+                        return (
+                          <div
+                            key={p.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              padding: "6px 12px",
+                              borderRadius: "20px",
+                              background: isActive ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)",
+                              border: isActive ? `1.5px solid ${p.color}` : "1.5px solid rgba(255,255,255,0.05)",
+                              boxShadow: isActive ? `0 0 10px ${p.color}44` : "none",
+                              transform: isActive ? "scale(1.05)" : "scale(1)",
+                              transition: "all 0.2s ease"
+                            }}
+                          >
+                            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: p.color }} />
+                            <span style={{ fontSize: "0.75rem", fontWeight: isActive ? "bold" : "normal", color: isActive ? "white" : "var(--text-muted)" }}>
+                              {p.name}: {p.position}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                      {/* Centered Rollable Dice */}
+                  {board && <GameBoardComponent board={board} players={players} gameMode={gameMode} theme={activeTheme} />}
+
+                  {/* Mobile Active Player Panel & Controls (below board) */}
+                  {board && (
+                    <div className="mobile-only" style={{ width: "100%", flexDirection: "column", alignItems: "center", gap: "0.75rem", marginTop: "1rem" }}>
+                      
+                      {/* Compact Roll Card & Dice */}
                       <div 
-                        onClick={() => {
-                          if (!isRolling && !players[currentTurnIndex]?.isBot) {
-                            handleRoll();
-                          }
-                        }}
-                        style={{
-                          cursor: (!isRolling && !players[currentTurnIndex]?.isBot) ? "pointer" : "default",
-                          transform: "scale(0.85)",
-                          margin: "-10px 0"
+                        className="glass" 
+                        style={{ 
+                          width: "100%", 
+                          maxWidth: "340px", 
+                          padding: "0.75rem 1rem", 
+                          borderRadius: "16px",
+                          display: "flex", 
+                          alignItems: "center", 
+                          justifyContent: "space-between",
+                          border: `1.5px solid ${players[currentTurnIndex]?.color}88`,
+                          boxShadow: `0 0 15px ${players[currentTurnIndex]?.color}22`
                         }}
                       >
-                        <Premium3DDice
-                          value={players[currentTurnIndex]?.lastRoll || 1}
-                          color={players[currentTurnIndex]?.color}
-                          isRolling={isDiceRolling}
-                          theme={activeTheme}
-                        />
-                      </div>
-                    </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px", textAlign: "left" }}>
+                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Active Turn</div>
+                          <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: players[currentTurnIndex]?.color }}>
+                            {players[currentTurnIndex]?.name} {players[currentTurnIndex]?.isBot && "🤖"}
+                          </div>
+                          {players[currentTurnIndex]?.isBot ? (
+                            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", animation: "pulse 1.5s infinite" }}>🤖 Thinking...</div>
+                          ) : (
+                            <div style={{ fontSize: "0.75rem", fontWeight: "bold", color: players[currentTurnIndex]?.color, animation: "pulse 1.5s infinite" }}>🎯 Tap Die to Roll!</div>
+                          )}
+                        </div>
 
-                    {/* Compact Logs & Quick Buttons */}
-                    <div className="glass" style={{ width: "100%", maxWidth: "340px", padding: "0.5rem 1rem", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.8rem" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-main)", fontWeight: "500" }}>
-                        <span style={{ fontSize: "0.9rem" }}>📝</span>
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {logs[0] || "Waiting to start..."}
-                        </span>
+                        {/* Centered Rollable Dice */}
+                        <div 
+                          onClick={() => {
+                            if (!isRolling && !players[currentTurnIndex]?.isBot) {
+                              handleRoll();
+                            }
+                          }}
+                          style={{
+                            cursor: (!isRolling && !players[currentTurnIndex]?.isBot) ? "pointer" : "default",
+                            transform: "scale(0.85)",
+                            margin: "-10px 0"
+                          }}
+                        >
+                          <Premium3DDice
+                            value={players[currentTurnIndex]?.lastRoll || 1}
+                            color={players[currentTurnIndex]?.color}
+                            isRolling={isDiceRolling}
+                            theme={activeTheme}
+                          />
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Mobile In-Game Theme Selector */}
-                    <div className="glass" style={{ width: "100%", maxWidth: "340px", padding: "0.75rem 1rem", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: "0.8rem", fontWeight: "bold", color: "var(--text-main)" }}>Board Theme 🎨</span>
-                        {isOnline && (
-                          <span style={{ fontSize: "0.65rem", background: isHost ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)", color: isHost ? "#10b981" : "#ef4444", padding: "1px 5px", borderRadius: "4px", fontWeight: "bold" }}>
-                            {isHost ? "Host" : "Guest"}
+                      {/* Compact Logs & Quick Buttons */}
+                      <div className="glass" style={{ width: "100%", maxWidth: "340px", padding: "0.5rem 1rem", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.8rem" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-main)", fontWeight: "500" }}>
+                          <span style={{ fontSize: "0.9rem" }}>📝</span>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {logs[0] || "Waiting to start..."}
                           </span>
+                        </div>
+                      </div>
+
+                      {/* Mobile In-Game Theme Selector */}
+                      <div className="glass" style={{ width: "100%", maxWidth: "340px", padding: "0.75rem 1rem", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: "0.8rem", fontWeight: "bold", color: "var(--text-main)" }}>Board Theme 🎨</span>
+                          {isOnline && (
+                            <span style={{ fontSize: "0.65rem", background: isHost ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)", color: isHost ? "#10b981" : "#ef4444", padding: "1px 5px", borderRadius: "4px", fontWeight: "bold" }}>
+                              {isHost ? "Host" : "Guest"}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", gap: "0.35rem", width: "100%" }}>
+                          {Object.keys(THEME_CONFIGS).map((themeKey) => {
+                            const isSelected = activeTheme === themeKey;
+                            const isAllowed = !isOnline || isHost;
+                            return (
+                              <button
+                                key={themeKey}
+                                onClick={() => {
+                                  if (isAllowed) {
+                                    handleThemeChange(themeKey);
+                                  }
+                                }}
+                                disabled={!isAllowed}
+                                style={{
+                                  flex: 1,
+                                  padding: "6px 2px",
+                                  fontSize: "0.75rem",
+                                  borderRadius: "6px",
+                                  border: isSelected ? "1.5px solid var(--p1-color)" : "1.5px solid rgba(255,255,255,0.1)",
+                                  background: isSelected ? "var(--p1-color)" : "rgba(255,255,255,0.02)",
+                                  color: isSelected ? "white" : "var(--text-muted)",
+                                  cursor: isAllowed ? "pointer" : "not-allowed",
+                                  opacity: isAllowed ? 1 : 0.45,
+                                  transition: "all 0.2s ease"
+                                }}
+                              >
+                                {themeKey === "classic" && "🎲"}
+                                {themeKey === "neon" && "✨"}
+                                {themeKey === "forest" && "🌿"}
+                                {themeKey === "space" && "🌌"}
+                                {themeKey === "sakura" && "🌸"}
+                                {themeKey === "candy" && "🍭"}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {isOnline && !isHost && (
+                          <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textAlign: "center" }}>
+                            Only the host can change the theme.
+                          </div>
                         )}
                       </div>
-                      <div style={{ display: "flex", gap: "0.35rem", width: "100%" }}>
-                        {Object.keys(THEME_CONFIGS).map((themeKey) => {
-                          const isSelected = activeTheme === themeKey;
-                          const isAllowed = !isOnline || isHost;
-                          return (
-                            <button
-                              key={themeKey}
-                              onClick={() => {
-                                if (isAllowed) {
-                                  handleThemeChange(themeKey);
-                                }
-                              }}
-                              disabled={!isAllowed}
-                              style={{
-                                flex: 1,
-                                padding: "6px 2px",
-                                fontSize: "0.75rem",
-                                borderRadius: "6px",
-                                border: isSelected ? "1.5px solid var(--p1-color)" : "1.5px solid rgba(255,255,255,0.1)",
-                                background: isSelected ? "var(--p1-color)" : "rgba(255,255,255,0.02)",
-                                color: isSelected ? "white" : "var(--text-muted)",
-                                cursor: isAllowed ? "pointer" : "not-allowed",
-                                opacity: isAllowed ? 1 : 0.45,
-                                transition: "all 0.2s ease"
-                              }}
-                            >
-                              {themeKey === "classic" && "🎲"}
-                              {themeKey === "neon" && "✨"}
-                              {themeKey === "forest" && "🌿"}
-                              {themeKey === "space" && "🌌"}
-                              {themeKey === "sakura" && "🌸"}
-                              {themeKey === "candy" && "🍭"}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {isOnline && !isHost && (
-                        <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textAlign: "center" }}>
-                          Only the host can change the theme.
-                        </div>
-                      )}
+
+                      <button
+                        className="btn btn-outline"
+                        onClick={() => {
+                          if (confirm("Are you sure you want to exit the current match? All progress will be lost.")) {
+                            exitGame();
+                          }
+                        }}
+                        style={{ width: "100%", maxWidth: "340px", borderColor: "#ef4444", color: "#ef4444", padding: "8px 16px", fontSize: "0.85rem", borderRadius: "8px" }}
+                      >
+                        Exit Match 🚪
+                      </button>
+
                     </div>
-
-
-                    <button
-                      className="btn btn-outline"
-                      onClick={() => {
-                        if (confirm("Are you sure you want to exit the current match? All progress will be lost.")) {
-                          exitGame();
-                        }
-                      }}
-                      style={{ width: "100%", maxWidth: "340px", borderColor: "#ef4444", color: "#ef4444", padding: "8px 16px", fontSize: "0.85rem", borderRadius: "8px" }}
-                    >
-                      Exit Match 🚪
-                    </button>
-
-                  </div>
-                )}
-              </div>
-
-              {/* Right Column (P2 Top, P4 Bottom) */}
-              <div className="tabletop-column desktop-only">
-                <PlayerCornerCard
-                  player={players[1]}
-                  isActive={currentTurnIndex === 1}
-                  isRolling={isRolling}
-                  isDiceRolling={isDiceRolling}
-                  onRoll={handleRoll}
-                  theme={activeTheme}
-                />
-                <PlayerCornerCard
-                  player={players[3]}
-                  isActive={currentTurnIndex === 3}
-                  isRolling={isRolling}
-                  isDiceRolling={isDiceRolling}
-                  onRoll={handleRoll}
-                  theme={activeTheme}
-                />
-              </div>
-
-            </div>
-          </div>
-
-          {/* Control Panel Side */}
-          <div className="glass desktop-only" style={{ flex: "0 0 320px", padding: "1.5rem", borderRadius: "16px", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-
-            {/* Winner State */}
-            {winner ? (
-              <div style={{ textAlign: "center" }}>
-                <h3 style={{ color: "var(--text-muted)", marginBottom: "0.25rem" }}>Match Status</h3>
-                <div style={{ fontSize: "1.4rem", fontWeight: "bold", color: winner.color }}>
-                  🏆 Victory! {winner.name} 🏆
+                  )}
                 </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: "center" }}>
-                <h3 style={{ color: "var(--text-muted)", marginBottom: "0.25rem" }}>Current Turn</h3>
-                <div style={{ fontSize: "1.4rem", fontWeight: "bold", color: players[currentTurnIndex]?.color }}>
-                  {players[currentTurnIndex]?.name} {players[currentTurnIndex]?.isBot && "(Bot)"}
-                </div>
-              </div>
-            )}
 
-            {/* Players Status */}
-            <div>
-              <h3 style={{ color: "var(--text-muted)", marginBottom: "0.5rem", borderBottom: "1px solid var(--surface-light)", paddingBottom: "0.5rem" }}>Players</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                {players.map((p, idx) => (
-                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem", background: idx === currentTurnIndex ? "rgba(255,255,255,0.05)" : "transparent", borderRadius: "8px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: p.color }} />
-                      <span>{p.name} {p.isBot && "🤖"}</span>
-                    </div>
-                    <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
-                      Pos: {p.position} {gameMode === "own-snake" && `| Own Snake: ${p.ownSnakeNumber}`}
-                    </div>
-                  </div>
-                ))}
+                {/* Right Column (P2 Top, P4 Bottom) */}
+                <div className="tabletop-column desktop-only">
+                  <PlayerCornerCard
+                    player={players[1]}
+                    isActive={currentTurnIndex === 1}
+                    isRolling={isRolling}
+                    isDiceRolling={isDiceRolling}
+                    onRoll={handleRoll}
+                    theme={activeTheme}
+                  />
+                  <PlayerCornerCard
+                    player={players[3]}
+                    isActive={currentTurnIndex === 3}
+                    isRolling={isRolling}
+                    isDiceRolling={isDiceRolling}
+                    onRoll={handleRoll}
+                    theme={activeTheme}
+                  />
+                </div>
+
               </div>
             </div>
 
-            {/* In-Game Theme Selection */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              <h3 style={{ color: "var(--text-muted)", marginBottom: "0.25rem", borderBottom: "1px solid var(--surface-light)", paddingBottom: "0.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span>Board Theme 🎨</span>
-                {isOnline && (
-                  <span style={{ fontSize: "0.7rem", background: isHost ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)", color: isHost ? "#10b981" : "#ef4444", padding: "2px 6px", borderRadius: "6px", border: isHost ? "1px solid #10b98144" : "1px solid #ef444444", fontWeight: "bold" }}>
-                    {isHost ? "Host" : "Guest (Read-Only)"}
-                  </span>
-                )}
-              </h3>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.5rem" }}>
-                {Object.keys(THEME_CONFIGS).map((themeKey) => {
-                  const isSelected = activeTheme === themeKey;
-                  const themeLabel = themeKey.charAt(0).toUpperCase() + themeKey.slice(1);
-                  const isAllowed = !isOnline || isHost;
-                  return (
-                    <button
-                      key={themeKey}
-                      onClick={() => {
-                        if (isAllowed) {
-                          handleThemeChange(themeKey);
-                        }
-                      }}
-                      disabled={!isAllowed}
-                      style={{
-                        padding: "8px 4px",
-                        fontSize: "0.8rem",
-                        borderRadius: "8px",
-                        border: isSelected ? "1.5px solid var(--p1-color)" : "1.5px solid rgba(255,255,255,0.15)",
-                        background: isSelected ? "var(--p1-color)" : "transparent",
-                        color: isSelected ? "white" : "var(--text-muted)",
-                        cursor: isAllowed ? "pointer" : "not-allowed",
-                        opacity: isAllowed ? 1 : 0.5,
-                        transition: "all 0.2s ease"
-                      }}
-                    >
-                      {themeKey === "classic" && "🎲 "}
-                      {themeKey === "neon" && "✨ "}
-                      {themeKey === "forest" && "🌿 "}
-                      {themeKey === "space" && "🌌 "}
-                      {themeKey === "sakura" && "🌸 "}
-                      {themeKey === "candy" && "🍭 "}
-                      {themeLabel}
-                    </button>
-                  );
-                })}
-              </div>
-              {isOnline && !isHost && (
-                <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textAlign: "center", marginTop: "2px" }}>
-                  Only the room creator can change the theme.
+            {/* Control Panel Side */}
+            <div className="glass desktop-only" style={{ flex: "0 0 320px", padding: "1.5rem", borderRadius: "16px", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+
+              {/* Winner State */}
+              {winner ? (
+                <div style={{ textAlign: "center" }}>
+                  <h3 style={{ color: "var(--text-muted)", marginBottom: "0.25rem" }}>Match Status</h3>
+                  <div style={{ fontSize: "1.4rem", fontWeight: "bold", color: winner.color }}>
+                    🏆 Victory! {winner.name} 🏆
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: "center" }}>
+                  <h3 style={{ color: "var(--text-muted)", marginBottom: "0.25rem" }}>Current Turn</h3>
+                  <div style={{ fontSize: "1.4rem", fontWeight: "bold", color: players[currentTurnIndex]?.color }}>
+                    {players[currentTurnIndex]?.name} {players[currentTurnIndex]?.isBot && "(Bot)"}
+                  </div>
                 </div>
               )}
-            </div>
 
-
-            {/* Action Logs */}
-            <div style={{ flex: 1, minHeight: "150px" }}>
-              <h3 style={{ color: "var(--text-muted)", marginBottom: "0.5rem", borderBottom: "1px solid var(--surface-light)", paddingBottom: "0.5rem" }}>Game Log</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.9rem" }}>
-                {logs.map((l, i) => (
-                  <div key={i} style={{ color: i === 0 ? "var(--text-main)" : "var(--text-muted)", opacity: 1 - (i * 0.2) }}>
-                    {l}
-                  </div>
-                ))}
+              {/* Players Status */}
+              <div>
+                <h3 style={{ color: "var(--text-muted)", marginBottom: "0.5rem", borderBottom: "1px solid var(--surface-light)", paddingBottom: "0.5rem" }}>Players</h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {players.map((p, idx) => (
+                    <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem", background: idx === currentTurnIndex ? "rgba(255,255,255,0.05)" : "transparent", borderRadius: "8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: p.color }} />
+                        <span>{p.name} {p.isBot && "🤖"}</span>
+                      </div>
+                      <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
+                        Pos: {p.position} {gameMode === "own-snake" && `| Own Snake: ${p.ownSnakeNumber}`}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
+
+              {/* In-Game Theme Selection */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <h3 style={{ color: "var(--text-muted)", marginBottom: "0.25rem", borderBottom: "1px solid var(--surface-light)", paddingBottom: "0.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>Board Theme 🎨</span>
+                  {isOnline && (
+                    <span style={{ fontSize: "0.7rem", background: isHost ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)", color: isHost ? "#10b981" : "#ef4444", padding: "2px 6px", borderRadius: "6px", border: isHost ? "1px solid #10b98144" : "1px solid #ef444444", fontWeight: "bold" }}>
+                      {isHost ? "Host" : "Guest (Read-Only)"}
+                    </span>
+                  )}
+                </h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.5rem" }}>
+                  {Object.keys(THEME_CONFIGS).map((themeKey) => {
+                    const isSelected = activeTheme === themeKey;
+                    const themeLabel = themeKey.charAt(0).toUpperCase() + themeKey.slice(1);
+                    const isAllowed = !isOnline || isHost;
+                    return (
+                      <button
+                        key={themeKey}
+                        onClick={() => {
+                          if (isAllowed) {
+                            handleThemeChange(themeKey);
+                          }
+                        }}
+                        disabled={!isAllowed}
+                        style={{
+                          padding: "8px 4px",
+                          fontSize: "0.8rem",
+                          borderRadius: "8px",
+                          border: isSelected ? "1.5px solid var(--p1-color)" : "1.5px solid rgba(255,255,255,0.15)",
+                          background: isSelected ? "var(--p1-color)" : "transparent",
+                          color: isSelected ? "white" : "var(--text-muted)",
+                          cursor: isAllowed ? "pointer" : "not-allowed",
+                          opacity: isAllowed ? 1 : 0.5,
+                          transition: "all 0.2s ease"
+                        }}
+                      >
+                        {themeKey === "classic" && "🎲 "}
+                        {themeKey === "neon" && "✨ "}
+                        {themeKey === "forest" && "🌿 "}
+                        {themeKey === "space" && "🌌 "}
+                        {themeKey === "sakura" && "🌸 "}
+                        {themeKey === "candy" && "🍭 "}
+                        {themeLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+                {isOnline && !isHost && (
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textAlign: "center", marginTop: "2px" }}>
+                    Only the room creator can change the theme.
+                  </div>
+                )}
+              </div>
+
+              {/* Action Logs */}
+              <div style={{ flex: 1, minHeight: "150px" }}>
+                <h3 style={{ color: "var(--text-muted)", marginBottom: "0.5rem", borderBottom: "1px solid var(--surface-light)", paddingBottom: "0.5rem" }}>Game Log</h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.9rem" }}>
+                  {logs.map((l, i) => (
+                    <div key={i} style={{ color: i === 0 ? "var(--text-main)" : "var(--text-muted)", opacity: 1 - (i * 0.2) }}>
+                      {l}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Exit/Reset Button */}
+              {!winner && (
+                <button
+                  className="btn btn-outline"
+                  onClick={() => {
+                    if (confirm("Are you sure you want to exit the current match? All progress will be lost.")) {
+                      exitGame();
+                    }
+                  }}
+                  style={{ width: "100%", borderColor: "#ef4444", color: "#ef4444", marginTop: "1rem" }}
+                >
+                  Exit Match
+                </button>
+              )}
+
             </div>
-
-            {/* Exit/Reset Button */}
-            {!winner && (
-              <button
-                className="btn btn-outline"
-                onClick={() => {
-                  if (confirm("Are you sure you want to exit the current match? All progress will be lost.")) {
-                    exitGame();
-                  }
-                }}
-                style={{ width: "100%", borderColor: "#ef4444", color: "#ef4444", marginTop: "1rem" }}
-              >
-                Exit Match
-              </button>
-            )}
-
           </div>
-        </div>
+        )
+      ) : (
+        ludoGamePhase === "lobby" ? (
+          <LudoLobbyComponent
+            onStart={startLudoGame}
+            onBack={() => setActiveGame(null)}
+            initialTheme={activeTheme}
+            onThemeChange={handleThemeChange}
+          />
+        ) : (
+          <LudoErrorBoundary onReset={() => { setLudoGamePhase("lobby"); setActiveGame(null); }}>
+            <LudoBoardComponent
+              players={ludoPlayers}
+              activePlayerIdx={ludoCurrentTurnIndex}
+              diceValue={ludoDiceValue}
+              isRolling={ludoIsRolling}
+              isDiceRolling={ludoIsDiceRolling}
+              onRoll={handleLudoRoll}
+              onSelectToken={(tIdx) => handleSelectLudoToken(ludoPlayers, ludoCurrentTurnIndex, tIdx, ludoDiceValue)}
+              legalMoves={ludoLegalMoves}
+              logs={ludoLogs}
+              activeTheme={activeTheme}
+              onThemeChange={handleThemeChange}
+              onExitGame={exitGame}
+              ludoVariation={ludoVariation}
+              ludoWalkingToken={ludoWalkingToken}
+            />
+          </LudoErrorBoundary>
+        )
       )}
 
-      {/* Full-Screen Glassmorphic Victory Overlay */}
-      {winner && (
+      {/* Full-Screen Glassmorphic Victory Overlay for Snakes & Ladders */}
+      {activeGame === "snake-ladder" && winner && (
         <div className="victory-overlay">
           {generateConfettiParticles()}
           <div 
@@ -1879,6 +2347,46 @@ export default function App() {
                   Waiting for Host... ⏳
                 </button>
               )}
+              <button 
+                className="btn btn-outline" 
+                style={{ flex: 1, padding: "14px 28px", borderColor: "rgba(255,255,255,0.2)", color: "white" }} 
+                onClick={exitGame}
+              >
+                Main Menu 🚪
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full-Screen Glassmorphic Victory Overlay for Ludo */}
+      {activeGame === "ludo" && ludoWinner && (
+        <div className="victory-overlay">
+          {generateConfettiParticles()}
+          <div 
+            className="victory-card" 
+            style={{ 
+              border: `2.5px solid ${ludoWinner.colorCode}`, 
+              boxShadow: `0 0 45px ${ludoWinner.colorCode}55, inset 0 0 20px rgba(255,255,255,0.05)` 
+            }}
+          >
+            <div className="victory-crown-container">
+              <div className="victory-rays" style={{ background: `radial-gradient(circle, ${ludoWinner.colorCode} 0%, transparent 70%)` }} />
+              <div className="victory-crown">👑</div>
+            </div>
+            <div style={{ color: ludoWinner.colorCode, fontSize: "1.1rem", fontWeight: "600", textTransform: "uppercase", letterSpacing: "3px" }}>
+              🎉 Congratulations! 🎉
+            </div>
+            <h2 className="victory-title">
+              {ludoWinner.name} Wins!
+            </h2>
+            <p className="victory-subtitle">
+              A spectacular victory! Guiding their circular 3D tokens home with tactical precision and absolute board domination. 🏆
+            </p>
+            <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
+              <button className="btn" style={{ flex: 1, padding: "14px 28px" }} onClick={restartLudoGame}>
+                Play Again 🔄
+              </button>
               <button 
                 className="btn btn-outline" 
                 style={{ flex: 1, padding: "14px 28px", borderColor: "rgba(255,255,255,0.2)", color: "white" }} 

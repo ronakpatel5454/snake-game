@@ -1,6 +1,6 @@
 import { GAME_MODES } from "../config/gameModes";
 
-export default function ModeSelectionComponent({ onSelectMode, onShowRules }) {
+export default function ModeSelectionComponent({ onSelectMode, onShowRules, onBack }) {
   return (
     <div className="glass" style={{ maxWidth: "600px", width: "100%", padding: "2.5rem", borderRadius: "24px", marginTop: "2rem", textAlign: "center" }}>
       <h1 className="title-glow" style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>Select Game Mode</h1>
@@ -89,6 +89,16 @@ export default function ModeSelectionComponent({ onSelectMode, onShowRules }) {
           </div>
         ))}
       </div>
+
+      {onBack && (
+        <button 
+          className="btn btn-outline" 
+          style={{ width: "100%", padding: "0.75rem", fontSize: "1rem", marginTop: "1.25rem", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", background: "transparent", cursor: "pointer" }} 
+          onClick={onBack}
+        >
+          ← Back to Game Selection
+        </button>
+      )}
     </div>
   );
 }

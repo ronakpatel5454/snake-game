@@ -35,6 +35,12 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
       title: "Beast-Snakes 🦖",
       color: "#f43f5e",
       glow: "rgba(244, 63, 94, 0.3)"
+    },
+    {
+      id: "ludo",
+      title: "Ludo Rules 👑",
+      color: "var(--secondary)",
+      glow: "rgba(236, 72, 153, 0.3)"
     }
   ];
 
@@ -190,6 +196,45 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
                 <span style={{ fontSize: "1.2rem", color: "#ec4899" }}>🌈</span>
                 <div>
                   <strong>Rainbow Boa (Blessed Snake):</strong> Head is on 15-35, Tail is on 60-80. Landing on it <strong>boosts you UP</strong> the board and awards you an <strong>extra roll</strong>!
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "ludo":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ background: "rgba(236, 72, 153, 0.1)", borderLeft: "4px solid var(--secondary)", padding: "1rem", borderRadius: "8px" }}>
+              <strong style={{ color: "white", fontSize: "1.05rem" }}>Ludo Race of Strategy</strong>
+              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                Roll the dice, free your tokens, eliminate opponents, navigate safe star zones, and guide your tokens home!
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", color: "var(--text-main)", fontSize: "0.95rem" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "var(--secondary)" }}>🎯</span>
+                <div>
+                  <strong>Classic Mode:</strong> Roll a <strong>6</strong> to release a token from your corner base yard. Race all 4 tokens around the board and into the home triangle!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "var(--secondary)" }}>⚡</span>
+                <div>
+                  <strong>Quick Mode:</strong> An ultra fast race! You only have <strong>1 token</strong> (or just need 1 token to reach home) to claim absolute victory!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "var(--secondary)" }}>👑</span>
+                <div>
+                  <strong>Master Mode:</strong> The ultimate battle! You **must kick/eliminate** at least 1 rival token to unlock your entry path to the home triangle!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "var(--accent)" }}>★</span>
+                <div>
+                  <strong>Safe Zones & Clashing:</strong> Landing on an opponent's token sends them back to base. However, intermediate star cells (<strong>★</strong>) are safe zones where clashing is disabled!
                 </div>
               </div>
             </div>
