@@ -40,7 +40,29 @@ export default function PlayerCornerCard({ player, isActive, isRolling, isDiceRo
         {player.name} {player.isBot && "🤖"}
       </div>
       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
-        {!isLudo ? `Pos: ${player.position}` : `Home: ${tokensHome} / ${player.tokens ? player.tokens.length : 4}`}
+        {!isLudo ? (
+          <div>
+            <div>Pos: {player.position}</div>
+            <div style={{ 
+              display: "flex", 
+              gap: "0.5rem", 
+              justifyContent: "center", 
+              marginTop: "4px", 
+              fontSize: "0.7rem",
+              background: "rgba(0,0,0,0.15)",
+              padding: "2px 6px",
+              borderRadius: "8px",
+              color: "var(--text-light)"
+            }}>
+              <span>🐍 {player.snakeBiteCount || 0}</span>
+              {player.consecutiveSixes > 0 && (
+                <span style={{ color: "#ff8c00", fontWeight: "bold" }}>🔥 {player.consecutiveSixes}x6</span>
+              )}
+            </div>
+          </div>
+        ) : (
+          `Home: ${tokensHome} / ${player.tokens ? player.tokens.length : 4}`
+        )}
       </div>
 
       <div

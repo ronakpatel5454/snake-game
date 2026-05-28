@@ -42,22 +42,23 @@ export const START_CELL_INDICES = {
 // Base slots coordinates
 export const BASE_SLOTS = {
   red: [
-    { x: 1.5, y: 1.5 }, { x: 3.5, y: 1.5 },
-    { x: 1.5, y: 3.5 }, { x: 3.5, y: 3.5 }
+    { x: 2, y: 2 }, { x: 4, y: 2 },
+    { x: 2, y: 4 }, { x: 4, y: 4 }
   ],
   green: [
-    { x: 10.5, y: 1.5 }, { x: 12.5, y: 1.5 },
-    { x: 10.5, y: 3.5 }, { x: 12.5, y: 3.5 }
+    { x: 11, y: 2 }, { x: 13, y: 2 },
+    { x: 11, y: 4 }, { x: 13, y: 4 }
   ],
   yellow: [
-    { x: 10.5, y: 9.5 }, { x: 12.5, y: 9.5 },
-    { x: 10.5, y: 11.5 }, { x: 12.5, y: 11.5 }
+    { x: 11, y: 11 }, { x: 13, y: 11 },
+    { x: 11, y: 13 }, { x: 13, y: 13 }
   ],
   blue: [
-    { x: 1.5, y: 9.5 }, { x: 3.5, y: 9.5 },
-    { x: 1.5, y: 11.5 }, { x: 3.5, y: 11.5 }
+    { x: 2, y: 11 }, { x: 4, y: 11 },
+    { x: 2, y: 13 }, { x: 4, y: 13 }
   ]
 };
+
 
 // Convert player token index (-1 to 56) to absolute grid (x, y) coordinates
 export function getTokenCoordinates(color, tokenIdx, stepIdx) {

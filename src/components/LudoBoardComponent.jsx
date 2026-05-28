@@ -58,20 +58,20 @@ const THEME_STYLES = {
 // Base slot coordinates for each color (4 slots per color)
 const BASE_SLOTS = {
   red: [
-    { x: 1.5, y: 1.5 }, { x: 3.5, y: 1.5 },
-    { x: 1.5, y: 3.5 }, { x: 3.5, y: 3.5 }
+    { x: 2, y: 2 }, { x: 4, y: 2 },
+    { x: 2, y: 4 }, { x: 4, y: 4 }
   ],
   green: [
-    { x: 10.5, y: 1.5 }, { x: 12.5, y: 1.5 },
-    { x: 10.5, y: 3.5 }, { x: 12.5, y: 3.5 }
+    { x: 11, y: 2 }, { x: 13, y: 2 },
+    { x: 11, y: 4 }, { x: 13, y: 4 }
   ],
   yellow: [
-    { x: 10.5, y: 9.5 }, { x: 12.5, y: 9.5 },
-    { x: 10.5, y: 11.5 }, { x: 12.5, y: 11.5 }
+    { x: 11, y: 11 }, { x: 13, y: 11 },
+    { x: 11, y: 13 }, { x: 13, y: 13 }
   ],
   blue: [
-    { x: 1.5, y: 9.5 }, { x: 3.5, y: 9.5 },
-    { x: 1.5, y: 11.5 }, { x: 3.5, y: 11.5 }
+    { x: 2, y: 11 }, { x: 4, y: 11 },
+    { x: 2, y: 13 }, { x: 4, y: 13 }
   ]
 };
 
@@ -225,7 +225,9 @@ export default function LudoBoardComponent({
   onThemeChange,
   onExitGame,
   ludoVariation = "ludo-classic",
-  ludoWalkingToken = null
+  ludoWalkingToken = null,
+  isOnline = false,
+  myPlayerId = ""
 }) {
   const tConfig = THEME_CONFIGS[activeTheme] || THEME_CONFIGS.classic;
   const tStyle = THEME_STYLES[activeTheme] || THEME_STYLES.classic;
@@ -412,49 +414,7 @@ export default function LudoBoardComponent({
           </span>
         </div>
 
-        {/* Mobile player turn info strip */}
-        <div className="mobile-only" style={{
-          width: "100%",
-          maxWidth: "520px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          background: `${activePlayer.colorCode}22`,
-          border: `1.5px solid ${activePlayer.colorCode}88`,
-          borderRadius: "12px",
-          padding: "10px 14px",
-          marginBottom: "10px",
-          boxShadow: `0 0 12px ${activePlayer.colorCode}33`
-        }}>
-          <div>
-            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>Current Turn</div>
-            <div style={{ fontSize: "1rem", fontWeight: "bold", color: activePlayer.colorCode }}>
-              {activePlayer.name} {activePlayer.isBot && "🤖"}
-            </div>
-            {diceValue && (
-              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Rolled: {diceValue}</div>
-            )}
-          </div>
-          <div
-            onClick={() => {
-              if (!isRolling && !activePlayer.isBot) {
-                onRoll();
-              }
-            }}
-            style={{
-              cursor: (!isRolling && !activePlayer.isBot) ? "pointer" : "default",
-              transform: "scale(0.8)",
-              transformOrigin: "center right"
-            }}
-          >
-            <Premium3DDice
-              value={activePlayer.lastRoll || 1}
-              color={activePlayer.colorCode}
-              isRolling={isDiceRolling}
-              theme={activeTheme}
-            />
-          </div>
-        </div>
+
 
         {/* Mobile legal moves hint */}
         {legalMoves.length > 0 && !isRolling && (
@@ -798,53 +758,149 @@ export default function LudoBoardComponent({
 
         </div>
 
-        {/* Mobile player status chips */}
+        {/* Redesigned Mobile Control Center — Centered, compact, fully responsive */}
         <div className="mobile-only" style={{
           width: "100%",
-          maxWidth: "520px",
+          maxWidth: "340px",
           display: "flex",
-          flexWrap: "wrap",
-          gap: "6px",
-          marginTop: "10px",
-          justifyContent: "center"
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "0.75rem",
+          marginTop: "1rem",
+          marginRight: "auto",
+          marginLeft: "auto"
         }}>
-          {(players || []).map((p, pIdx) => {
-            const isActive = pIdx === activePlayerIdx;
-            const tokensActive = (p.tokens || []).filter(s => s >= 0 && s < 56).length;
-            const tokensHome = (p.tokens || []).filter(s => s === 56).length;
-            return (
-              <div key={p.id || pIdx} style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "5px 10px",
-                borderRadius: "20px",
-                background: isActive ? `${p.colorCode || "#888"}22` : "rgba(255,255,255,0.03)",
-                border: `1.5px solid ${isActive ? (p.colorCode || "#888") : "rgba(255,255,255,0.08)"}`,
-                transition: "all 0.2s"
-              }}>
-                <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: p.colorCode || "#888" }} />
-                <span style={{ fontSize: "0.75rem", fontWeight: isActive ? "bold" : "normal", color: isActive ? "white" : "var(--text-muted)" }}>
-                  {p.name} {p.isBot && "🤖"}
-                </span>
-                <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>
-                  {tokensHome > 0 ? `🏠${tokensHome}` : `🏃${tokensActive}`}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Mobile logs + exit */}
-        <div className="mobile-only" style={{ width: "100%", maxWidth: "520px", marginTop: "10px" }}>
-          <div className="glass" style={{ padding: "0.75rem 1rem", borderRadius: "12px", marginBottom: "8px" }}>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "4px" }}>📝 Game Log</div>
-            {(logs || []).slice(0, 3).map((l, i) => (
-              <div key={i} style={{ fontSize: "0.8rem", color: i === 0 ? "var(--text-main)" : "var(--text-muted)", opacity: 1 - i * 0.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {l}
-              </div>
-            ))}
+          {/* 1. Mobile Player Status Chips */}
+          <div style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "6px",
+            width: "100%",
+            justifyContent: "center"
+          }}>
+            {(players || []).map((p, pIdx) => {
+              const isActive = pIdx === activePlayerIdx;
+              const tokensActive = (p.tokens || []).filter(s => s >= 0 && s < 56).length;
+              const tokensHome = (p.tokens || []).filter(s => s === 56).length;
+              return (
+                <div key={p.id || pIdx} style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "5px 10px",
+                  borderRadius: "20px",
+                  background: isActive ? `${p.colorCode || "#888"}22` : "rgba(255,255,255,0.03)",
+                  border: `1.5px solid ${isActive ? (p.colorCode || "#888") : "rgba(255,255,255,0.08)"}`,
+                  boxShadow: isActive ? `0 0 10px ${p.colorCode}33` : "none",
+                  transition: "all 0.2s"
+                }}>
+                  <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: p.colorCode || "#888" }} />
+                  <span style={{ fontSize: "0.75rem", fontWeight: isActive ? "bold" : "normal", color: isActive ? "white" : "var(--text-muted)" }}>
+                    {p.name} {p.isBot && "🤖"}
+                  </span>
+                  <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", marginLeft: "2px" }}>
+                    {tokensHome > 0 ? `🏠${tokensHome}` : `🏃${tokensActive}`}
+                  </span>
+                </div>
+              );
+            })}
           </div>
+
+          {/* 2. Active Turn Roll Card & Dice */}
+          <div 
+            className="glass" 
+            style={{ 
+              width: "100%", 
+              padding: "0.75rem 1rem", 
+              borderRadius: "16px",
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "space-between",
+              border: `1.5px solid ${activePlayer.colorCode}88`,
+              boxShadow: `0 0 15px ${activePlayer.colorCode}22`
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px", textAlign: "left" }}>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Active Turn</div>
+              <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: activePlayer.colorCode }}>
+                {activePlayer.name} {activePlayer.isBot && "🤖"}
+              </div>
+              {activePlayer.isBot ? (
+                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", animation: "pulse 1.5s infinite" }}>🤖 Thinking...</div>
+              ) : isOnline && activePlayer.id !== myPlayerId ? (
+                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", animation: "pulse 1.5s infinite" }}>⏳ Waiting for opponent...</div>
+              ) : (
+                <div style={{ fontSize: "0.75rem", fontWeight: "bold", color: activePlayer.colorCode, animation: "pulse 1.5s infinite" }}>🎯 Click Die to Roll!</div>
+              )}
+            </div>
+
+            {/* Clickable Roll Dice */}
+            <div 
+              onClick={() => {
+                if (!isRolling && !activePlayer.isBot) {
+                  if (isOnline && activePlayer.id !== myPlayerId) return;
+                  onRoll();
+                }
+              }}
+              style={{
+                cursor: (!isRolling && !activePlayer.isBot) ? "pointer" : "default",
+                transform: "scale(0.85)",
+                margin: "-10px 0"
+              }}
+            >
+              <Premium3DDice
+                value={activePlayer.lastRoll || 1}
+                color={activePlayer.colorCode}
+                isRolling={isDiceRolling}
+                theme={activeTheme}
+              />
+            </div>
+          </div>
+
+          {/* 3. Mobile Theme Selector — Finally added beautifully for mobile! */}
+          <div className="glass" style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "6px" }}>
+            <span style={{ fontSize: "0.8rem", fontWeight: "bold", color: "var(--text-main)", textAlign: "left" }}>Board Theme 🎨</span>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.35rem", width: "100%" }}>
+              {["classic", "neon", "forest", "space", "sakura", "candy"].map((themeKey) => {
+                const isSelected = activeTheme === themeKey;
+                return (
+                  <button
+                    key={themeKey}
+                    onClick={() => onThemeChange(themeKey)}
+                    style={{
+                      padding: "6px 2px",
+                      fontSize: "0.7rem",
+                      borderRadius: "6px",
+                      border: isSelected ? `1.5px solid ${activePlayer.colorCode}` : "1.5px solid rgba(255,255,255,0.12)",
+                      background: isSelected ? activePlayer.colorCode : "transparent",
+                      color: isSelected ? "white" : "var(--text-muted)",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease"
+                    }}
+                  >
+                    {themeKey === "classic" && "🎲 "}
+                    {themeKey === "neon" && "✨ "}
+                    {themeKey === "forest" && "🌿 "}
+                    {themeKey === "space" && "🌌 "}
+                    {themeKey === "sakura" && "🌸 "}
+                    {themeKey === "candy" && "🍭 "}
+                    {themeKey.charAt(0).toUpperCase() + themeKey.slice(1)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 4. Compact Logs & Exit Buttons */}
+          <div className="glass" style={{ width: "100%", padding: "0.5rem 1rem", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "4px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-main)", fontWeight: "500", fontSize: "0.8rem" }}>
+              <span style={{ fontSize: "0.9rem" }}>📝</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {logs[0] || "Waiting to start..."}
+              </span>
+            </div>
+          </div>
+
           <button
             className="btn btn-outline"
             onClick={() => {
@@ -852,7 +908,14 @@ export default function LudoBoardComponent({
                 onExitGame();
               }
             }}
-            style={{ width: "100%", borderColor: "#ef4444", color: "#ef4444", padding: "10px" }}
+            style={{ 
+              width: "100%", 
+              borderColor: "#ef4444", 
+              color: "#ef4444", 
+              padding: "8px 16px", 
+              fontSize: "0.85rem", 
+              borderRadius: "8px" 
+            }}
           >
             Exit Game 🚪
           </button>
@@ -868,6 +931,11 @@ export default function LudoBoardComponent({
           <div style={{ fontSize: "1.4rem", fontWeight: "bold", color: activePlayer.colorCode }}>
             {activePlayer.name} {activePlayer.isBot && "(Bot)"}
           </div>
+          {isOnline && activePlayer.id !== myPlayerId && (
+            <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "4px" }}>
+              ⏳ Waiting for opponent...
+            </div>
+          )}
         </div>
 
         {/* Token status table */}

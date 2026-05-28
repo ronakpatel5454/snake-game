@@ -48,7 +48,7 @@ import RulesModal from "./components/RulesModal";
 import GameSelectionComponent from "./components/GameSelectionComponent";
 import LudoLobbyComponent from "./components/LudoLobbyComponent";
 import LudoBoardComponent from "./components/LudoBoardComponent";
-import { getLegalMoves, executeLudoMove, getBotAIMove } from "./lib/ludoLogic";
+import { getLegalMoves, executeLudoMove, getBotAIMove, START_CELL_INDICES, SAFE_TRACK_INDICES } from "./lib/ludoLogic";
 
 const getClientPlayerId = () => {
   let id = localStorage.getItem("snake_game_client_player_id");
@@ -139,6 +139,28 @@ export default function App() {
 
   const [ludoWalkingToken, setLudoWalkingToken] = useState(null);
 
+  // --- Ludo Online Multiplayer States ---
+  const [ludoIsOnline, setLudoIsOnline] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_ludoIsOnline");
+      return saved ? JSON.parse(saved) : false;
+    } catch { return false; }
+  });
+  const [ludoGameCode, setLudoGameCode] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_ludoGameCode");
+      return saved ? JSON.parse(saved) : "";
+    } catch { return ""; }
+  });
+  const [ludoIsHost, setLudoIsHost] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_ludoIsHost");
+      return saved ? JSON.parse(saved) : false;
+    } catch { return false; }
+  });
+  const [ludoJoinedPlayers, setLudoJoinedPlayers] = useState([]);
+  const [ludoIsConnecting, setLudoIsConnecting] = useState(false);
+
   // Keep refs up-to-date to completely prevent stale closures in async timeouts
   const ludoPlayersRef = useRef(ludoPlayers);
   const ludoActivePlayerIdxRef = useRef(ludoCurrentTurnIndex);
@@ -147,6 +169,10 @@ export default function App() {
   const ludoDiceValueRef = useRef(ludoDiceValue);
   const ludoLegalMovesRef = useRef(ludoLegalMoves);
   const ludoConsecutiveSixesRef = useRef(ludoConsecutiveSixes);
+  const ludoIsOnlineRef = useRef(ludoIsOnline);
+  const ludoGameCodeRef = useRef(ludoGameCode);
+  const ludoIsHostRef = useRef(ludoIsHost);
+  const ludoJoinedPlayersRef = useRef(ludoJoinedPlayers);
 
   useEffect(() => {
     ludoPlayersRef.current = ludoPlayers;
@@ -176,8 +202,26 @@ export default function App() {
     ludoConsecutiveSixesRef.current = ludoConsecutiveSixes;
   }, [ludoConsecutiveSixes]);
 
+  useEffect(() => {
+    ludoIsOnlineRef.current = ludoIsOnline;
+  }, [ludoIsOnline]);
+
+  useEffect(() => {
+    ludoGameCodeRef.current = ludoGameCode;
+  }, [ludoGameCode]);
+
+  useEffect(() => {
+    ludoIsHostRef.current = ludoIsHost;
+  }, [ludoIsHost]);
+
+  useEffect(() => {
+    ludoJoinedPlayersRef.current = ludoJoinedPlayers;
+  }, [ludoJoinedPlayers]);
+
   // Sync Ludo states to localStorage to support page refresh/recovery
   useEffect(() => {
+    // Skip persisting mid-animation/rolling states to prevent page refresh desyncs!
+    if (ludoIsRolling || ludoIsDiceRolling) return;
     try {
       localStorage.setItem("snake_game_activeGame", JSON.stringify(activeGame));
       localStorage.setItem("snake_game_ludoPlayers", JSON.stringify(ludoPlayers));
@@ -189,10 +233,13 @@ export default function App() {
       localStorage.setItem("snake_game_ludoLegalMoves", JSON.stringify(ludoLegalMoves));
       localStorage.setItem("snake_game_ludoConsecutiveSixes", JSON.stringify(ludoConsecutiveSixes));
       localStorage.setItem("snake_game_ludoGamePhase", JSON.stringify(ludoGamePhase));
+      localStorage.setItem("snake_game_ludoIsOnline", JSON.stringify(ludoIsOnline));
+      localStorage.setItem("snake_game_ludoGameCode", JSON.stringify(ludoGameCode));
+      localStorage.setItem("snake_game_ludoIsHost", JSON.stringify(ludoIsHost));
     } catch (e) {
       console.error("Failed to save ludo state to localStorage", e);
     }
-  }, [activeGame, ludoPlayers, ludoCurrentTurnIndex, ludoLogs, ludoDiceValue, ludoWinner, ludoVariation, ludoLegalMoves, ludoConsecutiveSixes, ludoGamePhase]);
+  }, [activeGame, ludoPlayers, ludoCurrentTurnIndex, ludoLogs, ludoDiceValue, ludoWinner, ludoVariation, ludoLegalMoves, ludoConsecutiveSixes, ludoGamePhase, ludoIsRolling, ludoIsDiceRolling, ludoIsOnline, ludoGameCode, ludoIsHost]);
 
   const [players, setPlayers] = useState(() => {
     try {
@@ -337,6 +384,8 @@ export default function App() {
   // Persist local games only
   useEffect(() => {
     if (isOnline) return;
+    // Skip persisting mid-animation states to prevent page refresh desyncs!
+    if (isRolling || isDiceRolling) return;
     try {
       localStorage.setItem("snake_game_inGame", JSON.stringify(inGame));
       localStorage.setItem("snake_game_players", JSON.stringify(players));
@@ -352,7 +401,7 @@ export default function App() {
     } catch (e) {
       console.error("Failed to save game state to localStorage", e);
     }
-  }, [inGame, players, board, currentTurnIndex, logs, diceValue, winner, gameMode, setupSnakesCount, setupLaddersCount, activeTheme, isOnline]);
+  }, [inGame, players, board, currentTurnIndex, logs, diceValue, winner, gameMode, setupSnakesCount, setupLaddersCount, activeTheme, isOnline, isRolling, isDiceRolling]);
 
   const handleShowRules = (mode) => {
     setRulesMode(mode || gameMode || "classic");
@@ -360,17 +409,17 @@ export default function App() {
   };
 
   const handleThemeChange = async (newTheme) => {
-    if (isOnline && !isHost) return; // Restrict theme change to room host/creator
+    if (isOnline && !isHost) return;
+    if (ludoIsOnline && !ludoIsHost) return;
 
     setActiveTheme(newTheme);
     localStorage.setItem("snake_game_activeTheme", JSON.stringify(newTheme));
 
     const msg = `Theme changed to ${newTheme.toUpperCase()} 🎨`;
-    setLogs(prev => [msg, ...prev].slice(0, 5));
 
     if (isOnline && gameCode) {
+      setLogs(prev => [msg, ...prev].slice(0, 5));
       try {
-        // 1. Broadcast the theme-changed event for instant real-time sync
         if (broadcastChannelRef.current) {
           broadcastChannelRef.current.send({
             type: "broadcast",
@@ -379,7 +428,6 @@ export default function App() {
           });
         }
 
-        // 2. Persist theme choice in database row so newly joined or refreshed users see it
         const { data: game } = await supabase
           .from("games")
           .select("id, logs")
@@ -397,6 +445,41 @@ export default function App() {
         }
       } catch (err) {
         console.error("Failed to sync theme change to database:", err);
+      }
+    } else if (ludoIsOnline && ludoGameCode) {
+      setLudoLogs(prev => [msg, ...prev].slice(0, 5));
+      try {
+        if (ludoBroadcastChannelRef.current) {
+          ludoBroadcastChannelRef.current.send({
+            type: "broadcast",
+            event: "ludo-theme-changed",
+            payload: { theme: newTheme }
+          });
+        }
+
+        const { data: game } = await supabase
+          .from("ludo_games")
+          .select("id, logs")
+          .eq("code", ludoGameCode)
+          .single();
+
+        if (game) {
+          await supabase
+            .from("ludo_games")
+            .update({
+              theme: newTheme,
+              logs: [msg, ...(game.logs || [])].slice(0, 5)
+            })
+            .eq("id", game.id);
+        }
+      } catch (err) {
+        console.error("Failed to sync Ludo theme change to database:", err);
+      }
+    } else {
+      if (activeGame === "ludo") {
+        setLudoLogs(prev => [msg, ...prev].slice(0, 5));
+      } else {
+        setLogs(prev => [msg, ...prev].slice(0, 5));
       }
     }
   };
@@ -583,9 +666,249 @@ export default function App() {
     }
   };
 
+  const LUDO_COLOR_MAP = {
+    blue: "#3b82f6",
+    red: "#ef4444",
+    green: "#10b981",
+    yellow: "#fbbf24"
+  };
+
+  const handleCreateLudoOnlineRoom = async ({ hostName, hostColor, theme, variation, maxPlayers }) => {
+    setLudoIsConnecting(true);
+    try {
+      const code = generateRoomCode();
+      const { data: game, error: gameError } = await supabase
+        .from("ludo_games")
+        .insert({
+          code,
+          status: "waiting",
+          theme: theme || "classic",
+          ludo_variation: variation || "ludo-classic",
+          current_turn_index: 0,
+          dice_value: null,
+          consecutive_sixes: 0,
+          logs: ["Lobby created! 👑"]
+        })
+        .select()
+        .single();
+
+      if (gameError) throw gameError;
+
+      const numTokens = variation === "ludo-quick" ? 1 : 4;
+      const { error: playerError } = await supabase
+        .from("ludo_game_players")
+        .insert({
+          game_id: game.id,
+          client_player_id: myPlayerId,
+          name: hostName,
+          color: hostColor,
+          color_code: LUDO_COLOR_MAP[hostColor.toLowerCase()] || "#3b82f6",
+          tokens: Array(numTokens).fill(-1),
+          is_host: true,
+          is_bot: false,
+          last_roll: 1,
+          has_eliminated_opponent: false
+        });
+
+      if (playerError) throw playerError;
+
+      setLudoGameCode(code);
+      setLudoIsHost(true);
+      setLudoIsOnline(true);
+      
+      const newUrl = `${window.location.origin}${window.location.pathname}?code=${code}`;
+      window.history.pushState({ path: newUrl }, "", newUrl);
+    } catch (error) {
+      console.error("Error hosting Ludo game:", error);
+      alert("Failed to host room. Please try again.");
+    } finally {
+      setLudoIsConnecting(false);
+    }
+  };
+
+  const handleJoinLudoOnlineRoom = async ({ code, playerName, playerColor }) => {
+    setLudoIsConnecting(true);
+    try {
+      const cleanedCode = code.trim().toUpperCase();
+      const { data: game, error: gameError } = await supabase
+        .from("ludo_games")
+        .select("*")
+        .eq("code", cleanedCode)
+        .single();
+
+      if (gameError || !game) {
+        alert("Room not found. Check the code.");
+        setLudoIsConnecting(false);
+        return;
+      }
+
+      if (game.status !== "waiting") {
+        alert("This game has already started or finished.");
+        setLudoIsConnecting(false);
+        return;
+      }
+
+      const { data: existingPlayers } = await supabase
+        .from("ludo_game_players")
+        .select("*")
+        .eq("game_id", game.id);
+
+      if (existingPlayers && existingPlayers.length >= 4) {
+        alert("Room is full (max 4 players).");
+        setLudoIsConnecting(false);
+        return;
+      }
+
+      const isColorTaken = existingPlayers.some(p => p.color.toLowerCase() === playerColor.toLowerCase());
+      if (isColorTaken) {
+        alert("Selected color is already taken. Please choose another color.");
+        setLudoIsConnecting(false);
+        return;
+      }
+
+      const numTokens = game.ludo_variation === "ludo-quick" ? 1 : 4;
+
+      const alreadyInRoom = existingPlayers.find(p => p.client_player_id === myPlayerId);
+      if (alreadyInRoom) {
+        await supabase
+          .from("ludo_game_players")
+          .update({
+            name: playerName,
+            color: playerColor,
+            color_code: LUDO_COLOR_MAP[playerColor.toLowerCase()] || "#3b82f6",
+            tokens: Array(numTokens).fill(-1)
+          })
+          .eq("id", alreadyInRoom.id);
+      } else {
+        const { error: playerError } = await supabase
+          .from("ludo_game_players")
+          .insert({
+            game_id: game.id,
+            client_player_id: myPlayerId,
+            name: playerName,
+            color: playerColor,
+            color_code: LUDO_COLOR_MAP[playerColor.toLowerCase()] || "#3b82f6",
+            tokens: Array(numTokens).fill(-1),
+            is_host: false,
+            is_bot: false,
+            last_roll: 1,
+            has_eliminated_opponent: false
+          });
+        if (playerError) throw playerError;
+      }
+
+      setLudoGameCode(cleanedCode);
+      setLudoIsHost(false);
+      setLudoIsOnline(true);
+      setLudoVariation(game.ludo_variation);
+      setActiveTheme(game.theme);
+
+      const newUrl = `${window.location.origin}${window.location.pathname}?code=${cleanedCode}`;
+      window.history.pushState({ path: newUrl }, "", newUrl);
+    } catch (error) {
+      console.error("Error joining Ludo game:", error);
+      alert("Failed to join room.");
+    } finally {
+      setLudoIsConnecting(false);
+    }
+  };
+
+  const handleLeaveLudoOnlineRoom = async () => {
+    try {
+      if (ludoGameCode) {
+        const { data: game } = await supabase
+          .from("ludo_games")
+          .select("id, status")
+          .eq("code", ludoGameCode)
+          .maybeSingle();
+
+        if (game) {
+          if (ludoIsHost || game.status === "finished") {
+            await supabase
+              .from("ludo_games")
+              .delete()
+              .eq("id", game.id);
+          } else {
+            await supabase
+              .from("ludo_game_players")
+              .delete()
+              .eq("game_id", game.id)
+              .eq("client_player_id", myPlayerId);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error leaving room:", err);
+    } finally {
+      setLudoGameCode("");
+      setLudoIsHost(false);
+      setLudoIsOnline(false);
+      setLudoJoinedPlayers([]);
+      setLudoPlayers([]);
+      setLudoWinner(null);
+      setLudoGamePhase("lobby");
+      try {
+        localStorage.removeItem("snake_game_ludoIsOnline");
+        localStorage.removeItem("snake_game_ludoGameCode");
+        localStorage.removeItem("snake_game_ludoIsHost");
+      } catch (e) {
+        console.error("Failed to clean up ludo online localStorage:", e);
+      }
+      const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+      window.history.pushState({ path: cleanUrl }, "", cleanUrl);
+    }
+  };
+
+  const handleStartLudoOnlineGame = async (selectedTheme) => {
+    try {
+      const { data: game } = await supabase
+        .from("ludo_games")
+        .select("id")
+        .eq("code", ludoGameCode)
+        .single();
+
+      if (!game) return;
+
+      const numTokens = ludoVariation === "ludo-quick" ? 1 : 4;
+
+      const resetPromises = ludoJoinedPlayers.map(p => 
+        supabase
+          .from("ludo_game_players")
+          .update({
+            tokens: Array(numTokens).fill(-1),
+            last_roll: 1,
+            has_eliminated_opponent: false
+          })
+          .eq("game_id", game.id)
+          .eq("client_player_id", p.id)
+      );
+      await Promise.all(resetPromises);
+
+      await supabase
+        .from("ludo_games")
+        .update({
+          status: "playing",
+          theme: selectedTheme,
+          ludo_variation: ludoVariation,
+          current_turn_index: 0,
+          dice_value: null,
+          consecutive_sixes: 0,
+          winner_id: null,
+          logs: ["Game started! Let the race begin! 🚀"]
+        })
+        .eq("id", game.id);
+        
+    } catch (err) {
+      console.error("Error starting online Ludo game:", err);
+      alert("Failed to start online game.");
+    }
+  };
+
   const exitGame = () => {
     if (isOnline) {
       handleLeaveOnlineRoom();
+    } else if (ludoIsOnline) {
+      handleLeaveLudoOnlineRoom();
     } else {
       setInGame(false);
       setPlayers([]);
@@ -665,13 +988,19 @@ export default function App() {
           
           // Protect player positions during active animations to avoid visual snaps and jumps!
           setPlayers(prev => {
-            if (prev && prev.length > 0 && (isRollingRef.current || isDiceRollingRef.current)) {
-              return mapped.map(mItem => {
-                const existing = prev.find(p => p.id === mItem.id);
-                return existing ? { ...mItem, position: existing.position } : mItem;
-              });
-            }
-            return mapped;
+            return mapped.map(mItem => {
+              const existing = prev ? prev.find(p => p.id === mItem.id) : null;
+              const merged = {
+                ...mItem,
+                snakeBiteCount: existing ? (existing.snakeBiteCount || 0) : 0,
+                consecutiveSixes: existing ? (existing.consecutiveSixes || 0) : 0,
+                hasBeenBittenBySnake: existing ? (existing.hasBeenBittenBySnake || false) : false,
+              };
+              if (existing && (isRollingRef.current || isDiceRollingRef.current)) {
+                merged.position = existing.position;
+              }
+              return merged;
+            });
           });
         }
       };
@@ -810,6 +1139,187 @@ export default function App() {
     };
   }, [isOnline, gameCode, myPlayerId, isHost]);
 
+  // --- Ludo Realtime Lobby and State Sync Effects ---
+  useEffect(() => {
+    if (!ludoIsOnline || !ludoGameCode) return;
+
+    let gamesChannel;
+    let playersChannel;
+
+    const setupLudoSync = async () => {
+      const { data: game, error: gameError } = await supabase
+        .from("ludo_games")
+        .select("*")
+        .eq("code", ludoGameCode)
+        .single();
+
+      if (gameError || !game) {
+        handleLeaveLudoOnlineRoom();
+        return;
+      }
+
+      setLudoVariation(game.ludo_variation);
+      setActiveTheme(game.theme);
+
+      const fetchLudoPlayers = async () => {
+        const { data: playersList } = await supabase
+          .from("ludo_game_players")
+          .select("*")
+          .eq("game_id", game.id)
+          .order("created_at", { ascending: true });
+        
+        if (playersList) {
+          const mapped = playersList.map(p => ({
+            id: p.client_player_id,
+            name: p.name,
+            color: p.color,
+            colorCode: p.color_code,
+            tokens: p.tokens || [-1, -1, -1, -1],
+            isBot: p.is_bot,
+            isHost: p.is_host,
+            lastRoll: p.last_roll || 1,
+            hasEliminatedOpponent: p.has_eliminated_opponent || false
+          }));
+          setLudoJoinedPlayers(mapped);
+          
+          // Protect player token steps during active rolls or walks to avoid visual desync snaps!
+          setLudoPlayers(prev => {
+            return mapped.map(mItem => {
+              const existing = prev ? prev.find(p => p.id === mItem.id) : null;
+              if (existing && (ludoIsRollingRef.current || ludoIsDiceRollingRef.current)) {
+                return {
+                  ...mItem,
+                  tokens: existing.tokens // Preserve ongoing animation steps!
+                };
+              }
+              return mItem;
+            });
+          });
+        }
+      };
+      
+      await fetchLudoPlayers();
+
+      if (game.status === "playing" || game.status === "finished") {
+        setLudoCurrentTurnIndex(game.current_turn_index || 0);
+        if (game.logs) setLudoLogs(game.logs);
+        if (game.dice_value !== undefined) setLudoDiceValue(game.dice_value);
+        setLudoConsecutiveSixes(game.consecutive_sixes || 0);
+        setLudoGamePhase("playing");
+
+        if (game.status === "finished" && game.winner_id) {
+          const winPlayer = ludoPlayersRef.current.find(p => p.id === game.winner_id);
+          if (winPlayer) setLudoWinner(winPlayer);
+        }
+      }
+
+      gamesChannel = supabase
+        .channel(`ludo-room-metadata-${ludoGameCode}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "ludo_games" },
+          async (payload) => {
+            if (payload.eventType === "DELETE") {
+              if (payload.old && payload.old.id === game.id) {
+                handleLeaveLudoOnlineRoom();
+                alert("The Ludo match session has been completed or closed by the host.");
+              }
+              return;
+            }
+
+            const newRoomState = payload.new;
+            if (!newRoomState || newRoomState.code !== ludoGameCode) return;
+
+            setActiveTheme(newRoomState.theme);
+            setLudoVariation(newRoomState.ludo_variation);
+
+            if (newRoomState.status === "playing") {
+              // Protect active turn index from shifting during receiver animation
+              if (!ludoIsRollingRef.current && !ludoIsDiceRollingRef.current) {
+                setLudoCurrentTurnIndex(newRoomState.current_turn_index || 0);
+              }
+              if (newRoomState.logs) setLudoLogs(newRoomState.logs);
+              if (newRoomState.dice_value !== undefined) setLudoDiceValue(newRoomState.dice_value);
+              setLudoConsecutiveSixes(newRoomState.consecutive_sixes || 0);
+              setLudoGamePhase("playing");
+            }
+
+            if (newRoomState.status === "finished" && newRoomState.winner_id) {
+              const winPlayer = ludoPlayersRef.current.find(p => p.id === newRoomState.winner_id);
+              if (winPlayer) setLudoWinner(winPlayer);
+            } else if (newRoomState.status === "playing") {
+              setLudoWinner(null);
+            }
+
+            if (newRoomState.status === "waiting" && ludoGamePhase === "playing") {
+              setLudoGamePhase("lobby");
+              setLudoPlayers([]);
+              setLudoWinner(null);
+            }
+          }
+        )
+        .subscribe();
+
+      playersChannel = supabase
+        .channel(`ludo-room-players-${ludoGameCode}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "ludo_game_players" },
+          (payload) => {
+            const changedRow = payload.new || payload.old;
+            if (changedRow && changedRow.game_id === game.id) {
+              fetchLudoPlayers();
+            }
+          }
+        )
+        .subscribe();
+    };
+
+    setupLudoSync();
+
+    return () => {
+      if (gamesChannel) supabase.removeChannel(gamesChannel);
+      if (playersChannel) supabase.removeChannel(playersChannel);
+    };
+  }, [ludoIsOnline, ludoGameCode]);
+
+  // --- Ludo Realtime Broadcast Event Bus Channel Effect ---
+  const ludoBroadcastChannelRef = useRef(null);
+
+  useEffect(() => {
+    if (!ludoIsOnline || !ludoGameCode) return;
+
+    const channel = supabase.channel(`ludo-gameplay-broadcast-${ludoGameCode}`);
+
+    channel
+      .on("broadcast", { event: "ludo-dice-rolling" }, ({ payload }) => {
+        if (payload.playerId !== myPlayerId) {
+          setLudoIsDiceRolling(true);
+          setLudoIsRolling(true);
+        }
+      })
+      .on("broadcast", { event: "ludo-turn-animation" }, async ({ payload }) => {
+        if (payload.playerId !== myPlayerId) {
+          // Trigger the step-by-step walking animation exactly as executed on host
+          const latestPlayers = ludoPlayersRef.current;
+          await handleSelectLudoToken(latestPlayers, payload.activeIdx, payload.tokenIdx, payload.rollVal);
+        }
+      })
+      .on("broadcast", { event: "ludo-theme-changed" }, ({ payload }) => {
+        if (payload.theme) {
+          setActiveTheme(payload.theme);
+          setLudoLogs(prev => [`Theme synced: ${payload.theme.toUpperCase()} 🎨`, ...prev.slice(0, 4)]);
+        }
+      })
+      .subscribe();
+
+    ludoBroadcastChannelRef.current = channel;
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [ludoIsOnline, ludoGameCode, myPlayerId]);
+
   // --- Synced Walk / Slide Turn Animation ---
   const executeTurnAnimationOnly = async ({ playerId, roll, startPos, targetPos, boardElements }) => {
     if (rollingTimeoutRef.current) {
@@ -823,7 +1333,20 @@ export default function App() {
 
     try {
       setDiceValue(roll);
-      setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, lastRoll: roll } : p));
+      const latestPlayers = playersRef.current;
+      const activePlayerObj = latestPlayers.find(p => p.id === playerId);
+      const prevSixes = activePlayerObj ? (activePlayerObj.consecutiveSixes || 0) : 0;
+      const nextSixes = roll === 6 ? prevSixes + 1 : 0;
+
+      setPlayers(prev => prev.map(p => 
+        p.id === playerId 
+          ? { 
+              ...p, 
+              lastRoll: roll, 
+              consecutiveSixes: nextSixes === 3 ? 0 : nextSixes 
+            } 
+          : p
+      ));
       
       await new Promise(resolve => setTimeout(resolve, 1200));
       setIsDiceRolling(false);
@@ -839,11 +1362,11 @@ export default function App() {
           setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, unlockAttempts: (p.unlockAttempts || 0) + 1, lastRoll: roll } : p));
           await new Promise(resolve => setTimeout(resolve, 600));
         }
-      } else if (gameMode === "beast-snakes" && startPos === targetPos) {
-        // Frozen: did not move
+      } else if (startPos === targetPos) {
+        // Did not move (e.g. Frozen in beast-snakes, skipped due to three sixes, or need exact roll)
         await new Promise(resolve => setTimeout(resolve, 600));
-      } else if (gameMode === "beast-snakes" && targetPos < startPos) {
-        // Walk backwards due to panic
+      } else if (targetPos < startPos) {
+        // Walk backwards (either beast-snakes panic or forced backwards snake bite)
         for (let step = startPos - 1; step >= targetPos; step--) {
           setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
           await new Promise(resolve => setTimeout(resolve, 350));
@@ -880,7 +1403,16 @@ export default function App() {
         await new Promise(resolve => setTimeout(resolve, 900));
         setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isClimbing: false } : p));
       } else if (boardElements && boardElements.type === "snake") {
-        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isPanicking: true } : p));
+        setPlayers(prev => prev.map(p => 
+          p.id === playerId 
+            ? { 
+                ...p, 
+                isPanicking: true, 
+                snakeBiteCount: (p.snakeBiteCount || 0) + 1,
+                hasBeenBittenBySnake: true 
+              } 
+            : p
+        ));
         await new Promise(resolve => setTimeout(resolve, 750));
         setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isPanicking: false, isSwallowed: true } : p));
         await new Promise(resolve => setTimeout(resolve, 50));
@@ -964,11 +1496,17 @@ export default function App() {
   const handleLudoRoll = async () => {
     if (ludoIsRollingRef.current || ludoIsDiceRollingRef.current || ludoWinner || ludoDiceValue !== null) return;
 
+    const activeIdx = ludoActivePlayerIdxRef.current;
+    const activePlayer = ludoPlayersRef.current[activeIdx];
+
+    // In online play, you can only roll on your OWN turn!
+    if (ludoIsOnline && activePlayer.id !== myPlayerId) {
+      return;
+    }
+
     setLudoIsRolling(true);
     setLudoIsDiceRolling(true);
 
-    const activeIdx = ludoActivePlayerIdxRef.current;
-    const activePlayer = ludoPlayersRef.current[activeIdx];
     const roll = Math.floor(Math.random() * 6) + 1;
 
     // Update lastRoll immediately so the 3D dice has the target value before spinning!
@@ -976,6 +1514,36 @@ export default function App() {
       idx === activeIdx ? { ...p, lastRoll: roll } : p
     );
     setLudoPlayers(freshPlayers);
+
+    // Broadcast dice roll event so other screens start spinning
+    if (ludoIsOnline && ludoBroadcastChannelRef.current) {
+      ludoBroadcastChannelRef.current.send({
+        type: "broadcast",
+        event: "ludo-dice-rolling",
+        payload: { playerId: activePlayer.id, roll }
+      });
+    }
+
+    // Sync current roll value to supabase
+    if (ludoIsOnline) {
+      try {
+        const { data: game } = await supabase
+          .from("ludo_games")
+          .select("id")
+          .eq("code", ludoGameCode)
+          .single();
+        if (game) {
+          await supabase
+            .from("ludo_games")
+            .update({
+              dice_value: roll
+            })
+            .eq("id", game.id);
+        }
+      } catch (err) {
+        console.error("Failed to sync roll to database:", err);
+      }
+    }
 
     // Simulate dice roll animation
     await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -999,6 +1567,32 @@ export default function App() {
       setLudoConsecutiveSixes(0);
       setLudoLegalMoves([]);
       setLudoIsRolling(false);
+
+      if (ludoIsOnline) {
+        try {
+          const { data: game } = await supabase
+            .from("ludo_games")
+            .select("id")
+            .eq("code", ludoGameCode)
+            .single();
+          if (game) {
+            const nextIdx = (activeIdx + 1) % freshPlayers.length;
+            const finalLogs = [skipMsg, logMsg, ...ludoLogs].slice(0, 5);
+            await supabase
+              .from("ludo_games")
+              .update({
+                current_turn_index: nextIdx,
+                dice_value: null,
+                consecutive_sixes: 0,
+                logs: finalLogs
+              })
+              .eq("id", game.id);
+          }
+        } catch (err) {
+          console.error("Failed to sync skipped turn to database:", err);
+        }
+      }
+
       setTimeout(() => {
         passLudoTurn(freshPlayers, activeIdx);
       }, 1500);
@@ -1009,6 +1603,31 @@ export default function App() {
       const noMoveMsg = `No legal moves for ${activePlayer.name}. Turn passes!`;
       setLudoLogs((prev) => [noMoveMsg, ...prev].slice(0, 5));
       setLudoIsRolling(false);
+
+      if (ludoIsOnline) {
+        try {
+          const { data: game } = await supabase
+            .from("ludo_games")
+            .select("id")
+            .eq("code", ludoGameCode)
+            .single();
+          if (game) {
+            const nextIdx = (activeIdx + 1) % freshPlayers.length;
+            const finalLogs = [noMoveMsg, logMsg, ...ludoLogs].slice(0, 5);
+            await supabase
+              .from("ludo_games")
+              .update({
+                current_turn_index: nextIdx,
+                dice_value: null,
+                consecutive_sixes: 0,
+                logs: finalLogs
+              })
+              .eq("id", game.id);
+          }
+        } catch (err) {
+          console.error("Failed to sync skipped turn to database:", err);
+        }
+      }
 
       setTimeout(() => {
         passLudoTurn(freshPlayers, activeIdx);
@@ -1026,11 +1645,32 @@ export default function App() {
     }
   };
 
-  const handleSelectLudoToken = async (playersList, activeIdx, tokenIdx, rollVal) => {
+  const handleSelectLudoToken = async (playersList, activeIdx, tokenIdx, rollVal, isIncomingBroadcast = false) => {
     if (ludoIsRollingRef.current || ludoWinner) return;
-    setLudoIsRolling(true);
 
     const activePlayer = playersList[activeIdx];
+    if (ludoIsOnline && activePlayer.id !== myPlayerId && !isIncomingBroadcast) {
+      return;
+    }
+
+    if (tokenIdx === undefined || tokenIdx === null) return;
+
+    setLudoIsRolling(true);
+
+    // Broadcast token select / walk animation event so other screens play the exact same steps
+    if (ludoIsOnline && !isIncomingBroadcast && ludoBroadcastChannelRef.current) {
+      ludoBroadcastChannelRef.current.send({
+        type: "broadcast",
+        event: "ludo-turn-animation",
+        payload: {
+          playerId: activePlayer.id,
+          activeIdx,
+          tokenIdx,
+          rollVal
+        }
+      });
+    }
+
     const currentStep = activePlayer.tokens[tokenIdx];
     const targetStep = currentStep === -1 ? 0 : currentStep + rollVal;
 
@@ -1038,24 +1678,104 @@ export default function App() {
     setLudoWalkingToken({ playerIdx: activeIdx, tokenIdx: tokenIdx });
 
     // Incremental step-by-step walking animation
-    let tempPlayers = JSON.parse(JSON.stringify(playersList));
     if (currentStep === -1) {
       // 1. Release from base
-      tempPlayers[activeIdx].tokens[tokenIdx] = 0;
-      setLudoPlayers(tempPlayers);
+      setLudoPlayers((prev) => 
+        prev.map((p, idx) => 
+          idx === activeIdx 
+            ? { 
+                ...p, 
+                tokens: p.tokens.map((tVal, tIdx) => tIdx === tokenIdx ? 0 : tVal) 
+              } 
+            : p
+        )
+      );
       setLudoLogs((prev) => [`${activePlayer.name} released a token to the track! 🚀`, ...prev].slice(0, 5));
       await new Promise((resolve) => setTimeout(resolve, 400));
     } else {
       // 2. Walk forward cell-by-cell
       for (let s = currentStep + 1; s <= targetStep; s++) {
-        tempPlayers[activeIdx].tokens[tokenIdx] = s;
-        setLudoPlayers(tempPlayers);
-        await new Promise((resolve) => setTimeout(resolve, 260)); // 260ms walking speed per cell
+        setLudoPlayers((prev) => 
+          prev.map((p, idx) => 
+            idx === activeIdx 
+              ? { 
+                  ...p, 
+                  tokens: p.tokens.map((tVal, tIdx) => tIdx === tokenIdx ? s : tVal) 
+                } 
+              : p
+        )
+      );
+        await new Promise((resolve) => setTimeout(resolve, 240)); // 240ms walking speed per cell for a smooth, visible hop feel
       }
     }
 
     // Clear walking token animation state
     setLudoWalkingToken(null);
+
+    // Clash check and backward walking animation
+    let hasClashed = false;
+    if (targetStep >= 0 && targetStep <= 50) {
+      const startTrackIdx = START_CELL_INDICES[activePlayer.color.toLowerCase()] || 0;
+      const finalTrackIdx = (startTrackIdx + targetStep) % 52;
+      const isSafeCell = SAFE_TRACK_INDICES.includes(finalTrackIdx);
+
+      if (!isSafeCell) {
+        // Find any opponent tokens on finalTrackIdx
+        for (let oppIdx = 0; oppIdx < playersList.length; oppIdx++) {
+          if (oppIdx === activeIdx) continue;
+          const opp = playersList[oppIdx];
+          const oppColor = opp.color.toLowerCase();
+          const oppStartIdx = START_CELL_INDICES[oppColor] || 0;
+
+          for (let oppTokenIdx = 0; oppTokenIdx < opp.tokens.length; oppTokenIdx++) {
+            const oppStep = opp.tokens[oppTokenIdx];
+            if (oppStep >= 0 && oppStep <= 50) {
+              const oppTrackIdx = (oppStartIdx + oppStep) % 52;
+              if (oppTrackIdx === finalTrackIdx) {
+                // We found the clashed token! Let's animate it going backward step-by-step
+                hasClashed = true;
+                
+                // Show clash/eliminate message immediately!
+                setLudoLogs((prev) => [`⚔️ ${activePlayer.name} is hunting ${opp.name}'s token!`, ...prev].slice(0, 5));
+                
+                // Set walking token state for the clashed token so it bounces/hops during rewind
+                setLudoWalkingToken({ playerIdx: oppIdx, tokenIdx: oppTokenIdx });
+
+                // Walk backward cell-by-cell down to 0
+                for (let s = oppStep; s >= 0; s--) {
+                  setLudoPlayers((prev) => 
+                    prev.map((p, pI) => 
+                      pI === oppIdx 
+                        ? { 
+                            ...p, 
+                            tokens: p.tokens.map((tVal, tI) => tI === oppTokenIdx ? s : tVal) 
+                          } 
+                        : p
+                    )
+                  );
+                  await new Promise((resolve) => setTimeout(resolve, 80)); // Snappy backward walk rewind (80ms/step)
+                }
+
+                // Move finally to -1 (base)
+                setLudoPlayers((prev) => 
+                  prev.map((p, pI) => 
+                    pI === oppIdx 
+                      ? { 
+                          ...p, 
+                          tokens: p.tokens.map((tVal, tI) => tI === oppTokenIdx ? -1 : tVal) 
+                        } 
+                      : p
+                  )
+                );
+                await new Promise((resolve) => setTimeout(resolve, 250)); // Settle in home slot
+                
+                setLudoWalkingToken(null);
+              }
+            }
+          }
+        }
+      }
+    }
 
     // Compute clashing and victory rules on the original state list
     const { players: updatedPlayers, logs: moveLogs, extraRoll } = executeLudoMove(
@@ -1079,11 +1799,163 @@ export default function App() {
       setLudoWinner(activePlayerFinal);
       const winMsg = `🏆 ${activePlayerFinal.name} has won Ludo Royale! 🏆`;
       setLudoLogs((prev) => [winMsg, ...prev].slice(0, 5));
+
+      // Persist final Ludo winning state to localStorage immediately!
+      if (!isOnline && !ludoIsOnline) {
+        try {
+          const finalLogs = [`🏆 ${activePlayerFinal.name} has won Ludo Royale! 🏆`, ...moveLogs, ...ludoLogs].slice(0, 5);
+          localStorage.setItem("snake_game_ludoPlayers", JSON.stringify(updatedPlayers));
+          localStorage.setItem("snake_game_ludoCurrentTurnIndex", JSON.stringify(activeIdx));
+          localStorage.setItem("snake_game_ludoLogs", JSON.stringify(finalLogs));
+          localStorage.setItem("snake_game_ludoDiceValue", JSON.stringify(null));
+          localStorage.setItem("snake_game_ludoWinner", JSON.stringify(activePlayerFinal));
+          localStorage.setItem("snake_game_ludoVariation", JSON.stringify(ludoVariation));
+          localStorage.setItem("snake_game_ludoLegalMoves", JSON.stringify([]));
+          localStorage.setItem("snake_game_ludoConsecutiveSixes", JSON.stringify(0));
+          localStorage.setItem("snake_game_ludoGamePhase", JSON.stringify("playing"));
+        } catch (e) {
+          console.error("Failed to persist Ludo winning state to localStorage:", e);
+        }
+      }
+
+      // Sync final winning state to database
+      if (ludoIsOnline && !isIncomingBroadcast) {
+        try {
+          const { data: game } = await supabase
+            .from("ludo_games")
+            .select("id")
+            .eq("code", ludoGameCode)
+            .single();
+
+          if (game) {
+            await supabase
+              .from("ludo_game_players")
+              .update({
+                tokens: activePlayerFinal.tokens,
+                last_roll: rollVal,
+                has_eliminated_opponent: activePlayerFinal.hasEliminatedOpponent
+              })
+              .eq("game_id", game.id)
+              .eq("client_player_id", activePlayerFinal.id);
+
+            const finalLogs = [`🏆 ${activePlayerFinal.name} has won Ludo Royale! 🏆`, ...moveLogs, ...ludoLogs].slice(0, 5);
+            await supabase
+              .from("ludo_games")
+              .update({
+                winner_id: activePlayerFinal.id,
+                status: "finished",
+                dice_value: null,
+                logs: finalLogs
+              })
+              .eq("id", game.id);
+          }
+        } catch (err) {
+          console.error("Failed to sync final winning turn to database:", err);
+        }
+      }
+
       setLudoIsRolling(false);
       return;
     }
 
     const getsAnotherRoll = (rollVal === 6 || extraRoll) && ludoConsecutiveSixesRef.current < 3;
+
+    // Persist final resolved Ludo state to localStorage immediately to survive mid-animation refreshes!
+    if (!isOnline && !ludoIsOnline) {
+      try {
+        const nextTurnIndex = getsAnotherRoll ? activeIdx : (activeIdx + 1) % updatedPlayers.length;
+        const finalWinner = hasWon ? activePlayerFinal : null;
+        const finalConsecutiveSixes = getsAnotherRoll ? (rollVal === 6 ? ludoConsecutiveSixesRef.current : 0) : 0;
+        
+        let finalLogs = [...moveLogs, ...ludoLogs].slice(0, 5);
+        if (hasWon) {
+          finalLogs = [`🏆 ${activePlayerFinal.name} has won Ludo Royale! 🏆`, ...finalLogs].slice(0, 5);
+        } else if (getsAnotherRoll) {
+          finalLogs = [`${activePlayerFinal.name} gets another roll! 🔄`, ...finalLogs].slice(0, 5);
+        }
+
+        localStorage.setItem("snake_game_ludoPlayers", JSON.stringify(updatedPlayers));
+        localStorage.setItem("snake_game_ludoCurrentTurnIndex", JSON.stringify(nextTurnIndex));
+        localStorage.setItem("snake_game_ludoLogs", JSON.stringify(finalLogs));
+        localStorage.setItem("snake_game_ludoDiceValue", JSON.stringify(null));
+        localStorage.setItem("snake_game_ludoWinner", JSON.stringify(finalWinner));
+        localStorage.setItem("snake_game_ludoVariation", JSON.stringify(ludoVariation));
+        localStorage.setItem("snake_game_ludoLegalMoves", JSON.stringify([]));
+        localStorage.setItem("snake_game_ludoConsecutiveSixes", JSON.stringify(finalConsecutiveSixes));
+        localStorage.setItem("snake_game_ludoGamePhase", JSON.stringify("playing"));
+      } catch (e) {
+        console.error("Failed to persist Ludo mid-turn state to localStorage:", e);
+      }
+    }
+
+    // Sync final turn state to database
+    if (ludoIsOnline && !isIncomingBroadcast) {
+      try {
+        const { data: game } = await supabase
+          .from("ludo_games")
+          .select("id")
+          .eq("code", ludoGameCode)
+          .single();
+
+        if (game) {
+          // 1. Update the local player row
+          await supabase
+            .from("ludo_game_players")
+            .update({
+              tokens: activePlayerFinal.tokens,
+              last_roll: rollVal,
+              has_eliminated_opponent: activePlayerFinal.hasEliminatedOpponent
+            })
+            .eq("game_id", game.id)
+            .eq("client_player_id", activePlayerFinal.id);
+
+          // 2. If an opponent clashed/hunted, update that opponent's tokens too!
+          const opponentUpdates = [];
+          for (let i = 0; i < updatedPlayers.length; i++) {
+            if (i === activeIdx) continue;
+            const originalOpp = playersList[i];
+            const updatedOpp = updatedPlayers[i];
+            const originalTokensStr = JSON.stringify(originalOpp.tokens);
+            const updatedTokensStr = JSON.stringify(updatedOpp.tokens);
+            if (originalTokensStr !== updatedTokensStr) {
+              opponentUpdates.push(
+                supabase
+                  .from("ludo_game_players")
+                  .update({
+                    tokens: updatedOpp.tokens
+                  })
+                  .eq("game_id", game.id)
+                  .eq("client_player_id", updatedOpp.id)
+              );
+            }
+          }
+          if (opponentUpdates.length > 0) {
+            await Promise.all(opponentUpdates);
+          }
+
+          // 3. Update global game row
+          const nextTurnIndex = getsAnotherRoll ? activeIdx : (activeIdx + 1) % updatedPlayers.length;
+          const finalConsecutiveSixes = getsAnotherRoll ? (rollVal === 6 ? ludoConsecutiveSixesRef.current : 0) : 0;
+          
+          let finalLogs = [...moveLogs, ...ludoLogs].slice(0, 5);
+          if (getsAnotherRoll) {
+            finalLogs = [`${activePlayerFinal.name} gets another roll! 🔄`, ...finalLogs].slice(0, 5);
+          }
+
+          await supabase
+            .from("ludo_games")
+            .update({
+              current_turn_index: nextTurnIndex,
+              dice_value: null,
+              consecutive_sixes: finalConsecutiveSixes,
+              logs: finalLogs
+            })
+            .eq("id", game.id);
+        }
+      } catch (err) {
+        console.error("Failed to sync final turn to database:", err);
+      }
+    }
 
     setLudoIsRolling(false);
 
@@ -1106,7 +1978,16 @@ export default function App() {
   const startGame = (setupPlayers, numSnakes = 3, numLadders = 5, selectedTheme = "classic") => {
     setSetupSnakesCount(numSnakes);
     setSetupLaddersCount(numLadders);
-    setPlayers(setupPlayers);
+    const initialPlayers = setupPlayers.map(p => ({
+      ...p,
+      snakeBiteCount: 0,
+      consecutiveSixes: 0,
+      hasBeenBittenBySnake: false,
+      position: p.position || 0,
+      unlockAttempts: p.unlockAttempts || 0,
+      lastRoll: p.lastRoll || 1
+    }));
+    setPlayers(initialPlayers);
     const playerSnakeHeads = gameMode === "own-snake" ? setupPlayers.map(p => p.ownSnakeNumber) : [];
     setBoard(generateBoard(playerSnakeHeads, numSnakes, numLadders, gameMode));
     setInGame(true);
@@ -1212,7 +2093,10 @@ export default function App() {
       ...p,
       position: 0,
       unlockAttempts: 0,
-      lastRoll: 1
+      lastRoll: 1,
+      snakeBiteCount: 0,
+      consecutiveSixes: 0,
+      hasBeenBittenBySnake: false
     }));
     setPlayers(resetPlayers);
     const playerSnakeHeads = gameMode === "own-snake" ? resetPlayers.map(p => p.ownSnakeNumber) : [];
@@ -1335,10 +2219,77 @@ export default function App() {
     const currentAttempts = player.unlockAttempts || 0;
     const isGuaranteedSix = isPlayerAtHome && currentAttempts >= 5;
 
-    const roll = isGuaranteedSix ? 6 : rollDice();
+    let roll;
+    if (activeGame === "snake-ladder" && player.consecutiveSixes >= 2) {
+      // Force non-six roll (1 to 5) for Issue 2
+      roll = Math.floor(Math.random() * 5) + 1;
+    } else {
+      roll = isGuaranteedSix ? 6 : rollDice();
+    }
+
+    // Forced snake bite logic near the end of the board (Issue 1) - COMMENTED OUT PER USER REQUEST
+    let isForcedBackwards = false;
+    let nearestSnake = null;
+    /*
+    const CRITICAL_ZONE_START = 85;
+    if (activeGame === "snake-ladder" && player.position >= CRITICAL_ZONE_START && !player.hasBeenBittenBySnake) {
+      const boardSnakes = boardRef.current ? boardRef.current.snakes : [];
+      if (boardSnakes.length > 0) {
+        let minDistance = Infinity;
+        for (const s of boardSnakes) {
+          if (gameMode === "beast-snakes" && s.type === "rainbow") continue;
+          const dist = Math.abs(s.head - player.position);
+          if (dist < minDistance) {
+            minDistance = dist;
+            nearestSnake = s;
+          }
+        }
+        if (nearestSnake) {
+          const dist = nearestSnake.head - player.position;
+          if (dist >= 1 && dist <= 6) {
+            roll = dist;
+          } else if (dist > 6) {
+            if (player.position + roll >= nearestSnake.head) {
+              roll = nearestSnake.head - player.position;
+            }
+          } else if (dist < 0) {
+            isForcedBackwards = true;
+            if (roll === 6) {
+              roll = Math.floor(Math.random() * 5) + 1; // Prevent extra turn
+            }
+          }
+        }
+      }
+    }
+    */
+
+    // Custom Snake game win eligibility rules (not for Ludo)
+    if (activeGame === "snake-ladder") {
+      const winningRoll = 100 - player.position;
+      if (winningRoll >= 1 && winningRoll <= 6) {
+        // const hasSnakeBite = player.hasBeenBittenBySnake === true; // COMMENTED OUT PER USER REQUEST
+        const allPlayersInZone = playersRef.current.every(p => p.position >= 80);
+        if (!allPlayersInZone) { // Changed from (!hasSnakeBite || !allPlayersInZone)
+          while (roll === winningRoll) {
+            if (player.consecutiveSixes >= 2) {
+              roll = Math.floor(Math.random() * 5) + 1;
+            } else {
+              roll = rollDice();
+            }
+          }
+        }
+      }
+    }
     setDiceValue(roll);
 
-    setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, lastRoll: roll } : p));
+    const prevSixes = player.consecutiveSixes || 0;
+    const nextSixes = roll === 6 ? prevSixes + 1 : 0;
+
+    setPlayers(prev => prev.map(p => 
+      p.id === player.id 
+        ? { ...p, lastRoll: roll, consecutiveSixes: nextSixes } 
+        : p
+    ));
 
     // Broadcast dice roll event so other screens start spinning
     if (isOnline && broadcastChannelRef.current) {
@@ -1362,17 +2313,122 @@ export default function App() {
       return;
     }
 
+    if (nextSixes === 3) {
+      addLog(`⚠️ 3 consecutive sixes! ${player.name}'s turn is skipped.`);
+      
+      if (isOnline && broadcastChannelRef.current) {
+        broadcastChannelRef.current.send({
+          type: "broadcast",
+          event: "turn-animation",
+          payload: { 
+            playerId: player.id, 
+            roll, 
+            startPos: player.position, 
+            targetPos: player.position, 
+            boardElements: { type: "none" },
+            isAutoRoll
+          }
+        });
+      }
+
+      if (isOnline) {
+        try {
+          const { data: game } = await supabase
+            .from("games")
+            .select("id")
+            .eq("code", gameCode)
+            .single();
+
+          if (game) {
+            await supabase
+              .from("game_players")
+              .update({
+                position: player.position,
+                unlock_attempts: player.unlockAttempts || 0,
+                last_roll: roll
+              })
+              .eq("game_id", game.id)
+              .eq("client_player_id", player.id);
+
+            const nextTurnIndex = (currentTurnIndex + 1) % players.length;
+            const updatedLogs = [`⚠️ 3 consecutive sixes! ${player.name}'s turn is skipped.`, ...logs].slice(0, 5);
+            
+            await supabase
+              .from("games")
+              .update({
+                current_turn_index: nextTurnIndex,
+                dice_value: roll,
+                logs: updatedLogs
+              })
+              .eq("id", game.id);
+          }
+        } catch (err) {
+          console.error("Failed to sync turn to database:", err);
+        }
+      }
+
+      nextTurn();
+      setIsRolling(false);
+
+      if (isOnline && isHost) {
+        handleTimeoutTracking(player.id, isAutoRoll);
+      }
+      return;
+    }
+
     let currentPos = currentPlayer.position;
     let updatedAttempts = currentPlayer.unlockAttempts || 0;
     let grantsAnotherTurn = false;
     let logMsg = "";
     let boardElements = { type: "none" };
 
-    const outcome = calculateNewPosition(currentPos, roll, latestBoard, currentPlayer, gameMode);
+    let outcome;
+    /*
+    if (isForcedBackwards && nearestSnake) {
+      outcome = {
+        position: nearestSnake.tail,
+        message: `Forced backwards to land on a snake! Slide down from ${nearestSnake.head} to ${nearestSnake.tail}.`,
+        wasSafeSnake: false,
+        grantsAnotherTurn: false,
+        updatedAttempts: 0
+      };
+    } else {
+      outcome = calculateNewPosition(currentPos, roll, latestBoard, currentPlayer, gameMode);
+    }
+    */
+    outcome = calculateNewPosition(currentPos, roll, latestBoard, currentPlayer, gameMode);
     const finalPos = outcome.position;
     logMsg = outcome.message;
     grantsAnotherTurn = outcome.grantsAnotherTurn;
     updatedAttempts = outcome.updatedAttempts;
+
+    // Persist final target state to localStorage immediately to survive mid-animation refreshes!
+    if (!isOnline) {
+      try {
+        const nextTurnIndex = outcome.grantsAnotherTurn ? currentTurnIndex : (currentTurnIndex + 1) % players.length;
+        const updatedPlayersForStorage = players.map(p => 
+          p.id === player.id 
+            ? { 
+                ...p, 
+                position: finalPos, 
+                lastRoll: roll,
+                consecutiveSixes: nextSixes
+              } 
+            : p
+        );
+        const updatedLogsForStorage = [`${player.name}: ${outcome.message}`, ...logs].slice(0, 5);
+
+        localStorage.setItem("snake_game_players", JSON.stringify(updatedPlayersForStorage));
+        localStorage.setItem("snake_game_currentTurnIndex", JSON.stringify(nextTurnIndex));
+        localStorage.setItem("snake_game_diceValue", JSON.stringify(roll));
+        localStorage.setItem("snake_game_logs", JSON.stringify(updatedLogsForStorage));
+        if (finalPos === 100) {
+          localStorage.setItem("snake_game_winner", JSON.stringify(currentPlayer));
+        }
+      } catch (e) {
+        console.error("Failed to persist mid-turn state to localStorage:", e);
+      }
+    }
 
     if (currentPos === 0) {
       if (roll === 6) {
@@ -1383,7 +2439,36 @@ export default function App() {
         setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, unlockAttempts: updatedAttempts, lastRoll: roll } : p));
         await new Promise(resolve => setTimeout(resolve, 600));
       }
-    } else if (gameMode === "beast-snakes" && finalPos === currentPos) {
+    } /* else if (isForcedBackwards && nearestSnake) {
+      // Walk backwards to the snake head
+      for (let step = currentPos - 1; step >= nearestSnake.head; step--) {
+        setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
+        await new Promise(resolve => setTimeout(resolve, 350));
+      }
+      setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isWalking: false } : p));
+      currentPos = nearestSnake.head;
+      await new Promise(resolve => setTimeout(resolve, 400));
+
+      // Slide down the snake
+      boardElements = { type: "snake", tail: finalPos };
+      setPlayers(prev => prev.map(p => 
+        p.id === player.id 
+          ? { 
+              ...p, 
+              isPanicking: true, 
+              snakeBiteCount: (p.snakeBiteCount || 0) + 1,
+              hasBeenBittenBySnake: true 
+            } 
+          : p
+      ));
+      await new Promise(resolve => setTimeout(resolve, 750));
+      setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: false, isSwallowed: true } : p));
+      await new Promise(resolve => setTimeout(resolve, 50));
+      setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: finalPos } : p));
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isSwallowed: false } : p));
+      currentPos = finalPos;
+    } */ else if (gameMode === "beast-snakes" && finalPos === currentPos) {
       // Frozen and did not roll a 6
       setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, unlockAttempts: updatedAttempts, lastRoll: roll } : p));
       await new Promise(resolve => setTimeout(resolve, 600));
@@ -1430,7 +2515,16 @@ export default function App() {
         } else if (finalPos < intermediatePos) {
           // Sliding snake
           boardElements = { type: "snake", tail: finalPos };
-          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: true } : p));
+          setPlayers(prev => prev.map(p => 
+            p.id === player.id 
+              ? { 
+                  ...p, 
+                  isPanicking: true, 
+                  snakeBiteCount: (p.snakeBiteCount || 0) + 1,
+                  hasBeenBittenBySnake: true
+                } 
+              : p
+          ));
           await new Promise(resolve => setTimeout(resolve, 750));
           setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: false, isSwallowed: true } : p));
           await new Promise(resolve => setTimeout(resolve, 50));
@@ -2290,6 +3384,19 @@ export default function App() {
             onBack={() => setActiveGame(null)}
             initialTheme={activeTheme}
             onThemeChange={handleThemeChange}
+            onlineState={{
+              isOnline: ludoIsOnline,
+              gameCode: ludoGameCode,
+              joinedPlayers: ludoJoinedPlayers,
+              isHost: ludoIsHost,
+              myPlayerId: myPlayerId,
+              isConnecting: ludoIsConnecting
+            }}
+            onCreateOnlineRoom={handleCreateLudoOnlineRoom}
+            onJoinOnlineRoom={handleJoinLudoOnlineRoom}
+            onStartOnlineGame={handleStartLudoOnlineGame}
+            onLeaveOnlineRoom={handleLeaveLudoOnlineRoom}
+            onToggleOnlineMode={setLudoIsOnline}
           />
         ) : (
           <LudoErrorBoundary onReset={() => { setLudoGamePhase("lobby"); setActiveGame(null); }}>
@@ -2308,6 +3415,8 @@ export default function App() {
               onExitGame={exitGame}
               ludoVariation={ludoVariation}
               ludoWalkingToken={ludoWalkingToken}
+              isOnline={ludoIsOnline}
+              myPlayerId={myPlayerId}
             />
           </LudoErrorBoundary>
         )
