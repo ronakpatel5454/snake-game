@@ -49,6 +49,17 @@ import GameSelectionComponent from "./components/GameSelectionComponent";
 import LudoLobbyComponent from "./components/LudoLobbyComponent";
 import LudoBoardComponent from "./components/LudoBoardComponent";
 import { getLegalMoves, executeLudoMove, getBotAIMove, START_CELL_INDICES, SAFE_TRACK_INDICES } from "./lib/ludoLogic";
+import { 
+  playDiceRollSound, 
+  playMoveSound, 
+  playSnakeBiteSound, 
+  playLadderSound, 
+  playSixSound, 
+  playClashSound, 
+  playVictorySound, 
+  toggleMute, 
+  getMutedState 
+} from "./lib/soundEffects";
 
 const getClientPlayerId = () => {
   let id = localStorage.getItem("snake_game_client_player_id");
@@ -61,6 +72,12 @@ const getClientPlayerId = () => {
 
 
 export default function App() {
+  const [isSoundMuted, setIsSoundMuted] = useState(() => getMutedState());
+  const handleToggleMute = () => {
+    const newState = toggleMute();
+    setIsSoundMuted(newState);
+  };
+
   const [inGame, setInGame] = useState(() => {
     try {
       const saved = localStorage.getItem("snake_game_inGame");
@@ -380,6 +397,19 @@ export default function App() {
       ludoPendingTurnIndexRef.current = null;
     }
   }, [ludoIsRolling, ludoIsDiceRolling]);
+
+  // Play victory chime when a winner is decided
+  useEffect(() => {
+    if (winner) {
+      playVictorySound();
+    }
+  }, [winner]);
+
+  useEffect(() => {
+    if (ludoWinner) {
+      playVictorySound();
+    }
+  }, [ludoWinner]);
 
   // Clean up timeout on unmount
   useEffect(() => {
@@ -1113,6 +1143,7 @@ export default function App() {
     channel
       .on("broadcast", { event: "dice-rolling" }, ({ payload }) => {
         if (payload.playerId !== myPlayerId) {
+          playDiceRollSound();
           setIsDiceRolling(true);
           setIsRolling(true);
 
@@ -1333,6 +1364,7 @@ export default function App() {
 
   // --- Synced Ludo Dice Roll Animation ---
   const executeLudoDiceRollAnimationOnly = async ({ playerId, roll }) => {
+    playDiceRollSound();
     if (rollingTimeoutRef.current) {
       clearTimeout(rollingTimeoutRef.current);
       rollingTimeoutRef.current = null;
@@ -1350,6 +1382,9 @@ export default function App() {
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     setLudoDiceValue(roll);
+    if (roll === 6) {
+      playSixSound();
+    }
     
     // Clear lock
     setLudoIsRolling(false);
@@ -1374,6 +1409,9 @@ export default function App() {
 
     try {
       setDiceValue(roll);
+      if (roll === 6) {
+        playSixSound();
+      }
       const latestPlayers = playersRef.current;
       const activePlayerObj = latestPlayers.find(p => p.id === playerId);
       const prevSixes = activePlayerObj ? (activePlayerObj.consecutiveSixes || 0) : 0;
@@ -1396,6 +1434,7 @@ export default function App() {
       let currentPos = startPos;
       if (currentPos === 0) {
         if (roll === 6) {
+          playMoveSound();
           setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: 1, unlockAttempts: 0, lastRoll: roll } : p));
           await new Promise(resolve => setTimeout(resolve, 600));
           currentPos = 1;
@@ -1409,6 +1448,7 @@ export default function App() {
       } else if (targetPos < startPos) {
         // Walk backwards (either beast-snakes panic or forced backwards snake bite)
         for (let step = startPos - 1; step >= targetPos; step--) {
+          playMoveSound();
           setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
           await new Promise(resolve => setTimeout(resolve, 350));
         }
@@ -1428,6 +1468,7 @@ export default function App() {
 
         if (startPos + walkDist <= 100) {
           for (let step = startPos + 1; step <= startPos + walkDist; step++) {
+            playMoveSound();
             setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
             await new Promise(resolve => setTimeout(resolve, 350));
           }
@@ -1438,12 +1479,14 @@ export default function App() {
       }
 
       if (boardElements && boardElements.type === "ladder") {
+        playLadderSound();
         setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isClimbing: true } : p));
         await new Promise(resolve => setTimeout(resolve, 50));
         setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: boardElements.top } : p));
         await new Promise(resolve => setTimeout(resolve, 900));
         setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isClimbing: false } : p));
       } else if (boardElements && boardElements.type === "snake") {
+        playSnakeBiteSound();
         setPlayers(prev => prev.map(p => 
           p.id === playerId 
             ? { 
@@ -1537,6 +1580,7 @@ export default function App() {
   const handleLudoRoll = async () => {
     if (ludoIsRollingRef.current || ludoIsDiceRollingRef.current || ludoWinner || ludoDiceValue !== null) return;
 
+    playDiceRollSound();
     const activeIdx = ludoActivePlayerIdxRef.current;
     const activePlayer = ludoPlayersRef.current[activeIdx];
 
@@ -1592,6 +1636,9 @@ export default function App() {
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     setLudoDiceValue(roll);
+    if (roll === 6) {
+      playSixSound();
+    }
 
     const legals = getLegalMoves(freshPlayers, activeIdx, roll, ludoVariation);
     setLudoLegalMoves(legals);
@@ -1721,6 +1768,7 @@ export default function App() {
     // Incremental step-by-step walking animation
     if (currentStep === -1) {
       // 1. Release from base
+      playMoveSound();
       setLudoPlayers((prev) => 
         prev.map((p, idx) => 
           idx === activeIdx 
@@ -1736,6 +1784,7 @@ export default function App() {
     } else {
       // 2. Walk forward cell-by-cell
       for (let s = currentStep + 1; s <= targetStep; s++) {
+        playMoveSound();
         setLudoPlayers((prev) => 
           prev.map((p, idx) => 
             idx === activeIdx 
@@ -1744,8 +1793,8 @@ export default function App() {
                   tokens: p.tokens.map((tVal, tIdx) => tIdx === tokenIdx ? s : tVal) 
                 } 
               : p
-        )
-      );
+          )
+        );
         await new Promise((resolve) => setTimeout(resolve, 240)); // 240ms walking speed per cell for a smooth, visible hop feel
       }
     }
@@ -1775,6 +1824,7 @@ export default function App() {
               if (oppTrackIdx === finalTrackIdx) {
                 // We found the clashed token! Let's animate it going backward step-by-step
                 hasClashed = true;
+                playClashSound();
                 
                 // Show clash/eliminate message immediately!
                 setLudoLogs((prev) => [`⚔️ ${activePlayer.name} is hunting ${opp.name}'s token!`, ...prev].slice(0, 5));
@@ -1784,6 +1834,7 @@ export default function App() {
 
                 // Walk backward cell-by-cell down to 0
                 for (let s = oppStep; s >= 0; s--) {
+                  playMoveSound();
                   setLudoPlayers((prev) => 
                     prev.map((p, pI) => 
                       pI === oppIdx 
@@ -2253,6 +2304,7 @@ export default function App() {
   };
 
   const executeTurn = async (player, isAutoRoll = false) => {
+    playDiceRollSound();
     setIsRolling(true);
     setIsDiceRolling(true);
 
@@ -2322,6 +2374,9 @@ export default function App() {
       }
     }
     setDiceValue(roll);
+    if (roll === 6) {
+      playSixSound();
+    }
 
     const prevSixes = player.consecutiveSixes || 0;
     const nextSixes = roll === 6 ? prevSixes + 1 : 0;
@@ -2473,6 +2528,7 @@ export default function App() {
 
     if (currentPos === 0) {
       if (roll === 6) {
+        playMoveSound();
         setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: 1, unlockAttempts: 0, lastRoll: roll } : p));
         await new Promise(resolve => setTimeout(resolve, 600));
         currentPos = 1;
@@ -2536,6 +2592,7 @@ export default function App() {
 
       if (intermediatePos <= 100) {
         for (let step = currentPos + 1; step <= intermediatePos; step++) {
+          playMoveSound();
           setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
           await new Promise(resolve => setTimeout(resolve, 350));
         }
@@ -2546,6 +2603,7 @@ export default function App() {
         // Check for slides / climbs
         if (finalPos > intermediatePos) {
           // Climbing ladder
+          playLadderSound();
           boardElements = { type: "ladder", top: finalPos };
           setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: true } : p));
           await new Promise(resolve => setTimeout(resolve, 50));
@@ -2555,6 +2613,7 @@ export default function App() {
           currentPos = finalPos;
         } else if (finalPos < intermediatePos) {
           // Sliding snake
+          playSnakeBiteSound();
           boardElements = { type: "snake", tail: finalPos };
           setPlayers(prev => prev.map(p => 
             p.id === player.id 
@@ -2982,6 +3041,46 @@ export default function App() {
           100% { margin-left: 20px; }
         }
       `}</style>
+
+      <button
+        onClick={handleToggleMute}
+        style={{
+          position: "fixed",
+          top: "20px",
+          right: "20px",
+          zIndex: 9999,
+          width: "48px",
+          height: "48px",
+          borderRadius: "50%",
+          background: "rgba(255, 255, 255, 0.1)",
+          backdropFilter: "blur(12px)",
+          border: "1px solid rgba(255, 255, 255, 0.25)",
+          boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.37)",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "1.4rem",
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          outline: "none"
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)";
+          e.currentTarget.style.transform = "scale(1.1) rotate(5deg)";
+          e.currentTarget.style.border = "1px solid rgba(255, 255, 255, 0.4)";
+          e.currentTarget.style.boxShadow = "0 8px 32px 0 rgba(236, 72, 153, 0.4)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)";
+          e.currentTarget.style.transform = "scale(1) rotate(0deg)";
+          e.currentTarget.style.border = "1px solid rgba(255, 255, 255, 0.25)";
+          e.currentTarget.style.boxShadow = "0 8px 32px 0 rgba(31, 38, 135, 0.37)";
+        }}
+        aria-label={isSoundMuted ? "Unmute sounds" : "Mute sounds"}
+        title={isSoundMuted ? "Unmute sounds" : "Mute sounds"}
+      >
+        {isSoundMuted ? "🔇" : "🔊"}
+      </button>
 
       {activeGame === null ? (
               <GameSelectionComponent
