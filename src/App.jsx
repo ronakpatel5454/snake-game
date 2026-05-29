@@ -335,6 +335,7 @@ export default function App() {
   const isDiceRollingRef = useRef(isDiceRolling);
   const rollingTimeoutRef = useRef(null);
   const pendingTurnIndexRef = useRef(null);
+  const ludoPendingTurnIndexRef = useRef(null);
   const consecutiveTimeoutsRef = useRef({});
 
   useEffect(() => {
@@ -371,6 +372,14 @@ export default function App() {
       pendingTurnIndexRef.current = null;
     }
   }, [isRolling, isDiceRolling]);
+
+  // Apply pending Ludo turn index once Ludo rolling / walking animations finish
+  useEffect(() => {
+    if (!ludoIsRolling && !ludoIsDiceRolling && ludoPendingTurnIndexRef.current !== null) {
+      setLudoCurrentTurnIndex(ludoPendingTurnIndexRef.current);
+      ludoPendingTurnIndexRef.current = null;
+    }
+  }, [ludoIsRolling, ludoIsDiceRolling]);
 
   // Clean up timeout on unmount
   useEffect(() => {
@@ -1235,8 +1244,11 @@ export default function App() {
 
             if (newRoomState.status === "playing") {
               // Protect active turn index from shifting during receiver animation
-              if (!ludoIsRollingRef.current && !ludoIsDiceRollingRef.current) {
+              if (ludoIsRollingRef.current || ludoIsDiceRollingRef.current) {
+                ludoPendingTurnIndexRef.current = newRoomState.current_turn_index || 0;
+              } else {
                 setLudoCurrentTurnIndex(newRoomState.current_turn_index || 0);
+                ludoPendingTurnIndexRef.current = null;
               }
               if (newRoomState.logs) setLudoLogs(newRoomState.logs);
               if (newRoomState.dice_value !== undefined) setLudoDiceValue(newRoomState.dice_value);
@@ -1292,17 +1304,16 @@ export default function App() {
     const channel = supabase.channel(`ludo-gameplay-broadcast-${ludoGameCode}`);
 
     channel
-      .on("broadcast", { event: "ludo-dice-rolling" }, ({ payload }) => {
+      .on("broadcast", { event: "ludo-dice-rolling" }, async ({ payload }) => {
         if (payload.playerId !== myPlayerId) {
-          setLudoIsDiceRolling(true);
-          setLudoIsRolling(true);
+          await executeLudoDiceRollAnimationOnly(payload);
         }
       })
       .on("broadcast", { event: "ludo-turn-animation" }, async ({ payload }) => {
         if (payload.playerId !== myPlayerId) {
-          // Trigger the step-by-step walking animation exactly as executed on host
+          // Trigger the step-by-step walking animation exactly as executed on host, passing isIncomingBroadcast = true
           const latestPlayers = ludoPlayersRef.current;
-          await handleSelectLudoToken(latestPlayers, payload.activeIdx, payload.tokenIdx, payload.rollVal);
+          await handleSelectLudoToken(latestPlayers, payload.activeIdx, payload.tokenIdx, payload.rollVal, true);
         }
       })
       .on("broadcast", { event: "ludo-theme-changed" }, ({ payload }) => {
@@ -1319,6 +1330,36 @@ export default function App() {
       if (channel) supabase.removeChannel(channel);
     };
   }, [ludoIsOnline, ludoGameCode, myPlayerId]);
+
+  // --- Synced Ludo Dice Roll Animation ---
+  const executeLudoDiceRollAnimationOnly = async ({ playerId, roll }) => {
+    if (rollingTimeoutRef.current) {
+      clearTimeout(rollingTimeoutRef.current);
+      rollingTimeoutRef.current = null;
+    }
+
+    setLudoIsRolling(true);
+    setLudoIsDiceRolling(true);
+
+    // Update lastRoll for active player so the 3D dice shows the target value before spinning
+    setLudoPlayers(prev => prev.map(p => p.id === playerId ? { ...p, lastRoll: roll } : p));
+
+    // Simulate dice roll animation
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    setLudoIsDiceRolling(false);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    setLudoDiceValue(roll);
+    
+    // Clear lock
+    setLudoIsRolling(false);
+
+    // Compute legal moves locally so interactive elements highlight correctly on guest screens
+    const latestPlayers = ludoPlayersRef.current;
+    const activeIdx = ludoActivePlayerIdxRef.current;
+    const legals = getLegalMoves(latestPlayers, activeIdx, roll, ludoVariation);
+    setLudoLegalMoves(legals);
+  };
 
   // --- Synced Walk / Slide Turn Animation ---
   const executeTurnAnimationOnly = async ({ playerId, roll, startPos, targetPos, boardElements }) => {
@@ -2956,6 +2997,20 @@ export default function App() {
               setLudoLegalMoves([]);
               setLudoConsecutiveSixes(0);
               setLudoGamePhase("lobby"); // Always start at lobby
+
+              // Clean Ludo Online states completely!
+              setLudoIsOnline(false);
+              setLudoGameCode("");
+              setLudoIsHost(false);
+              setLudoJoinedPlayers([]);
+              setLudoIsConnecting(false);
+              try {
+                localStorage.removeItem("snake_game_ludoIsOnline");
+                localStorage.removeItem("snake_game_ludoGameCode");
+                localStorage.removeItem("snake_game_ludoIsHost");
+              } catch (e) {
+                console.error("Failed to clean Ludo online state on game selection", e);
+              }
             } else {
               setGameMode(null);
               setInGame(false);
