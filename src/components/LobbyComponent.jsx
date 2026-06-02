@@ -36,13 +36,14 @@ export default function LobbyComponent({
   const [numSnakes, setNumSnakes] = useState("3");
   const [numLadders, setNumLadders] = useState("5");
   const [customBoardElements, setCustomBoardElements] = useState(false);
-  const [shuffleInterval, setShuffleInterval] = useState(1);
+  const [shuffleInterval, setShuffleInterval] = useState("1");
   const [shuffleLadders, setShuffleLadders] = useState(false);
 
   // Parse and compute validation errors in real-time
   const minSnakes = gameMode === "beast-snakes" ? 0 : 3;
   const numSnakesParsed = parseInt(numSnakes);
   const numLaddersParsed = parseInt(numLadders);
+  const shuffleIntervalParsed = parseInt(shuffleInterval);
 
   const snakesError = isNaN(numSnakesParsed) || numSnakes.trim() === ""
     ? "Please enter a valid number."
@@ -54,6 +55,12 @@ export default function LobbyComponent({
     ? "Please enter a valid number."
     : numLaddersParsed < 0 || numLaddersParsed > 10
       ? "Number of ladders must be between 0 and 10."
+      : null;
+
+  const shuffleIntervalError = isNaN(shuffleIntervalParsed) || shuffleInterval.toString().trim() === ""
+    ? "Please enter a valid number."
+    : shuffleIntervalParsed < 1 || shuffleIntervalParsed > 5
+      ? "Shuffle interval must be between 1 and 5."
       : null;
 
   // --- Online Mode States ---
@@ -169,6 +176,11 @@ export default function LobbyComponent({
       }
     }
 
+    if (gameMode === "shuffle-snake" && shuffleIntervalError) {
+      alert(shuffleIntervalError);
+      return;
+    }
+
     const finalPlayers = playerConfigs.map((c, i) => ({
       id: `p${i}`,
       name: c.name,
@@ -180,7 +192,7 @@ export default function LobbyComponent({
       lastRoll: 1
     }));
 
-    onStart(finalPlayers, finalSnakes, finalLadders, selectedTheme, shuffleInterval, shuffleLadders);
+    onStart(finalPlayers, finalSnakes, finalLadders, selectedTheme, shuffleIntervalParsed || 1, shuffleLadders);
   };
 
   // Online Action triggers
@@ -193,16 +205,11 @@ export default function LobbyComponent({
       alert("Safe Snake head must be between 15 and 99.");
       return;
     }
-    if (customBoardElements) {
-      if (snakesError) {
-        alert(snakesError);
-        return;
-      }
-      if (laddersError) {
-        alert(laddersError);
-        return;
-      }
+    if (gameMode === "shuffle-snake" && shuffleIntervalError) {
+      alert(shuffleIntervalError);
+      return;
     }
+
     onCreateOnlineRoom({
       hostName: onlineName,
       hostColor: onlineColor,
@@ -211,7 +218,7 @@ export default function LobbyComponent({
       customElements: customBoardElements,
       snakesCount: numSnakesParsed,
       laddersCount: numLaddersParsed,
-      shuffleInterval: shuffleInterval,
+      shuffleInterval: shuffleIntervalParsed || 1,
       shuffleLadders: shuffleLadders
     });
   };
@@ -238,15 +245,9 @@ export default function LobbyComponent({
   };
 
   const handleStartOnline = () => {
-    if (customBoardElements) {
-      if (snakesError) {
-        alert(snakesError);
-        return;
-      }
-      if (laddersError) {
-        alert(laddersError);
-        return;
-      }
+    if (gameMode === "shuffle-snake" && shuffleIntervalError) {
+      alert(shuffleIntervalError);
+      return;
     }
 
     let finalSnakes = numSnakesParsed;
@@ -267,7 +268,7 @@ export default function LobbyComponent({
       }
     }
 
-    onStartOnlineGame(finalSnakes, finalLadders, selectedTheme, shuffleInterval, shuffleLadders);
+    onStartOnlineGame(finalSnakes, finalLadders, selectedTheme, shuffleIntervalParsed || 1, shuffleLadders);
   };
 
   const handleCopyLink = () => {
@@ -461,15 +462,19 @@ export default function LobbyComponent({
                       </label>
                       <input 
                         type="number" 
-                        min="1" 
-                        max="5" 
                         value={shuffleInterval} 
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value) || 1;
-                          setShuffleInterval(Math.min(5, Math.max(1, val)));
+                        onChange={(e) => setShuffleInterval(e.target.value)} 
+                        style={{ 
+                          width: "100%", 
+                          borderColor: shuffleIntervalError ? "#ef4444" : "rgba(255,255,255,0.15)",
+                          outlineColor: shuffleIntervalError ? "#ef4444" : "transparent"
                         }} 
-                        style={{ width: "100%" }} 
                       />
+                      {shuffleIntervalError && (
+                        <div style={{ color: "#ef4444", fontSize: "0.8rem", marginTop: "0.35rem", fontWeight: "500" }}>
+                          ⚠️ {shuffleIntervalError}
+                        </div>
+                      )}
                     </div>
                     <div style={{ 
                       display: "flex", 
@@ -850,15 +855,19 @@ export default function LobbyComponent({
                 </label>
                 <input 
                   type="number" 
-                  min="1" 
-                  max="5" 
                   value={shuffleInterval} 
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value) || 1;
-                    setShuffleInterval(Math.min(5, Math.max(1, val)));
+                  onChange={(e) => setShuffleInterval(e.target.value)} 
+                  style={{ 
+                    width: "100%", 
+                    borderColor: shuffleIntervalError ? "#ef4444" : "rgba(255,255,255,0.15)",
+                    outlineColor: shuffleIntervalError ? "#ef4444" : "transparent"
                   }} 
-                  style={{ width: "100%" }} 
                 />
+                {shuffleIntervalError && (
+                  <div style={{ color: "#ef4444", fontSize: "0.8rem", marginTop: "0.35rem", fontWeight: "500" }}>
+                    ⚠️ {shuffleIntervalError}
+                  </div>
+                )}
               </div>
               <div style={{ 
                 display: "flex", 

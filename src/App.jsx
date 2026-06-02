@@ -1429,9 +1429,6 @@ export default function App() {
 
     try {
       setDiceValue(roll);
-      if (roll === 6) {
-        playSixSound();
-      }
       const latestPlayers = playersRef.current;
       const activePlayerObj = latestPlayers.find(p => p.id === playerId);
       const prevSixes = activePlayerObj ? (activePlayerObj.consecutiveSixes || 0) : 0;
@@ -1450,6 +1447,10 @@ export default function App() {
       await new Promise(resolve => setTimeout(resolve, 1200));
       setIsDiceRolling(false);
       await new Promise(resolve => setTimeout(resolve, 300));
+
+      if (roll === 6) {
+        playSixSound();
+      }
 
       let currentPos = startPos;
       if (currentPos === 0) {
@@ -2459,9 +2460,6 @@ export default function App() {
     */
 
     setDiceValue(roll);
-    if (roll === 6) {
-      playSixSound();
-    }
 
     const prevSixes = player.consecutiveSixes || 0;
     const nextSixes = roll === 6 ? prevSixes + 1 : 0;
@@ -2484,6 +2482,10 @@ export default function App() {
     await new Promise(resolve => setTimeout(resolve, 1200));
     setIsDiceRolling(false);
     await new Promise(resolve => setTimeout(resolve, 300));
+
+    if (roll === 6) {
+      playSixSound();
+    }
 
     const latestBoard = boardRef.current;
     const latestPlayers = playersRef.current;
