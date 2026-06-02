@@ -38,7 +38,7 @@ class LudoErrorBoundary extends Component {
 }
 import GameBoardComponent from "./components/GameBoardComponent";
 import LobbyComponent from "./components/LobbyComponent";
-import { generateBoard, rollDice, calculateNewPosition } from "./lib/gameLogic";
+import { generateBoard, rollDice, calculateNewPosition } from "./lib/gameLogic.js";
 import { supabase } from "./lib/supabase";
 import PlayerCornerCard from "./components/PlayerCornerCard";
 import ModeSelectionComponent from "./components/ModeSelectionComponent";
@@ -2320,6 +2320,46 @@ export default function App() {
       roll = isGuaranteedSix ? 6 : rollDice();
     }
 
+    // Secret rule: if player already has 5 or more snake bites, prevent landing on a penalty cell!
+    if (activeGame === "snake-ladder" && (player.snakeBiteCount || 0) >= 5 && player.unlockAttempts !== 100) {
+      const invalidRolls = new Set();
+      const isNegative = gameMode === "negative-snake";
+
+      if (isNegative) {
+        // In negative snake mode, ladders slide you down (from l.top to l.bottom)
+        const activeLadders = board ? board.ladders : [];
+        activeLadders.forEach(l => {
+          const neededRoll = l.top - player.position;
+          if (neededRoll >= 1 && neededRoll <= 6) {
+            invalidRolls.add(neededRoll);
+          }
+        });
+      } else {
+        // In standard modes, snakes slide you down (from s.head to s.tail)
+        const activeSnakes = board ? board.snakes : [];
+        activeSnakes.forEach(s => {
+          if (s.type !== "rainbow") {
+            const neededRoll = s.head - player.position;
+            if (neededRoll >= 1 && neededRoll <= 6) {
+              invalidRolls.add(neededRoll);
+            }
+          }
+        });
+      }
+
+      if (invalidRolls.size > 0 && invalidRolls.size < 6) {
+        let attempts = 0;
+        while (invalidRolls.has(roll) && attempts < 100) {
+          if (player.consecutiveSixes >= 2) {
+            roll = Math.floor(Math.random() * 5) + 1;
+          } else {
+            roll = isGuaranteedSix ? 6 : rollDice();
+          }
+          attempts++;
+        }
+      }
+    }
+
     // Forced snake bite logic near the end of the board (Issue 1) - COMMENTED OUT PER USER REQUEST
     let isForcedBackwards = false;
     let nearestSnake = null;
@@ -2354,9 +2394,9 @@ export default function App() {
         }
       }
     }
-    */
 
-    // Custom Snake game win eligibility rules (not for Ludo)
+    /*
+    // Custom Snake game win eligibility rules (not for Ludo) - COMMENTED OUT PER USER REQUEST
     if (activeGame === "snake-ladder") {
       const winningRoll = 100 - player.position;
       if (winningRoll >= 1 && winningRoll <= 6) {
@@ -2373,6 +2413,8 @@ export default function App() {
         }
       }
     }
+    */
+
     setDiceValue(roll);
     if (roll === 6) {
       playSixSound();
@@ -2508,7 +2550,8 @@ export default function App() {
                 ...p, 
                 position: finalPos, 
                 lastRoll: roll,
-                consecutiveSixes: nextSixes
+                consecutiveSixes: nextSixes,
+                unlockAttempts: updatedAttempts
               } 
             : p
         );
@@ -2575,7 +2618,7 @@ export default function App() {
         setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
         await new Promise(resolve => setTimeout(resolve, 350));
       }
-      setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isWalking: false } : p));
+      setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isWalking: false, unlockAttempts: updatedAttempts } : p));
       currentPos = finalPos;
       await new Promise(resolve => setTimeout(resolve, 400));
     } else {
@@ -2596,7 +2639,7 @@ export default function App() {
           setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
           await new Promise(resolve => setTimeout(resolve, 350));
         }
-        setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isWalking: false } : p));
+        setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isWalking: false, unlockAttempts: updatedAttempts } : p));
         currentPos = intermediatePos;
         await new Promise(resolve => setTimeout(resolve, 400));
 
@@ -2607,9 +2650,9 @@ export default function App() {
           boardElements = { type: "ladder", top: finalPos };
           setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: true } : p));
           await new Promise(resolve => setTimeout(resolve, 50));
-          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: finalPos } : p));
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: finalPos, unlockAttempts: updatedAttempts } : p));
           await new Promise(resolve => setTimeout(resolve, 900));
-          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: false } : p));
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isClimbing: false, unlockAttempts: updatedAttempts } : p));
           currentPos = finalPos;
         } else if (finalPos < intermediatePos) {
           // Sliding snake
@@ -2628,9 +2671,9 @@ export default function App() {
           await new Promise(resolve => setTimeout(resolve, 750));
           setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isPanicking: false, isSwallowed: true } : p));
           await new Promise(resolve => setTimeout(resolve, 50));
-          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: finalPos } : p));
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: finalPos, unlockAttempts: updatedAttempts } : p));
           await new Promise(resolve => setTimeout(resolve, 1000));
-          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isSwallowed: false } : p));
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isSwallowed: false, unlockAttempts: updatedAttempts } : p));
           currentPos = finalPos;
         }
       }

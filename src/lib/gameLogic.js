@@ -225,8 +225,13 @@ export function calculateNewPosition(currentPos, diceValue, board, player, gameM
     // Check ladders (they slide you DOWN in negative-snake mode)
     const ladder = board.ladders.find(l => l.top === newPos);
     if (ladder) {
-      newPos = ladder.bottom;
-      message += ` Slid down a ladder from ${ladder.top} to ${ladder.bottom}!`;
+      const biteCount = player ? (player.snakeBiteCount || 0) : 0;
+      if (biteCount >= 5) {
+        // Secretly immune! Treat as a normal land on the tile, so no slide occurs.
+      } else {
+        newPos = ladder.bottom;
+        message += ` Slid down a ladder from ${ladder.top} to ${ladder.bottom}!`;
+      }
     } else {
       // Check snakes (they slide you UP in negative-snake mode)
       const snake = board.snakes.find(s => s.head === newPos);
@@ -245,33 +250,38 @@ export function calculateNewPosition(currentPos, diceValue, board, player, gameM
       // Check snakes
       const snake = board.snakes.find(s => s.head === newPos);
       if (snake) {
-        if (gameMode === "beast-snakes") {
-          newPos = snake.tail;
-          // Apply custom status effects based on snake type
-          if (snake.type === "anaconda") {
-            message += ` Landed on Anaconda 🦖! Huge drop from ${snake.head} to ${snake.tail}!`;
-          } else if (snake.type === "python") {
-            message += ` Bitten by Python ❄️! Slide down to ${snake.tail} and got FROZEN!`;
-            updatedAttempts = 100;
-          } else if (snake.type === "cobra") {
-            message += ` Bitten by Cobra 🧪! Slide down to ${snake.tail} and got POISONED for 2 turns!`;
-            updatedAttempts = 202;
-          } else if (snake.type === "viper") {
-            message += ` Bitten by Viper 🌀! Slide down to ${snake.tail} and got PANICKED!`;
-            updatedAttempts = 301;
-          } else if (snake.type === "rainbow") {
-            message += ` Blessed by Rainbow Boa 🌈! Swept UP the board from ${snake.head} to ${snake.tail}! Plus, you get an extra roll!`;
-            grantsAnotherTurn = true;
-          } else {
-            message += ` Landed on Grass Snake 🐍! Slid down from ${snake.head} to ${snake.tail}.`;
-          }
+        const biteCount = player ? (player.snakeBiteCount || 0) : 0;
+        if (biteCount >= 5 && snake.type !== "rainbow") {
+          // Secretly immune! Treat as a normal land on the tile, so no slide occurs.
         } else {
-          if (gameMode !== "classic" && newPos === (player ? player.ownSnakeNumber : -1)) {
-            wasSafeSnake = true;
-            message += ` Landed on your OWN snake at ${snake.head}! Immune!`;
-          } else {
+          if (gameMode === "beast-snakes") {
             newPos = snake.tail;
-            message += ` Bitten by a snake! Slide down from ${snake.head} to ${snake.tail}.`;
+            // Apply custom status effects based on snake type
+            if (snake.type === "anaconda") {
+              message += ` Landed on Anaconda 🦖! Huge drop from ${snake.head} to ${snake.tail}!`;
+            } else if (snake.type === "python") {
+              message += ` Bitten by Python ❄️! Slide down to ${snake.tail} and got FROZEN!`;
+              updatedAttempts = 100;
+            } else if (snake.type === "cobra") {
+              message += ` Bitten by Cobra 🧪! Slide down to ${snake.tail} and got POISONED for 2 turns!`;
+              updatedAttempts = 202;
+            } else if (snake.type === "viper") {
+              message += ` Bitten by Viper 🌀! Slide down to ${snake.tail} and got PANICKED!`;
+              updatedAttempts = 301;
+            } else if (snake.type === "rainbow") {
+              message += ` Blessed by Rainbow Boa 🌈! Swept UP the board from ${snake.head} to ${snake.tail}! Plus, you get an extra roll!`;
+              grantsAnotherTurn = true;
+            } else {
+              message += ` Landed on Grass Snake 🐍! Slid down from ${snake.head} to ${snake.tail}.`;
+            }
+          } else {
+            if (gameMode !== "classic" && newPos === (player ? player.ownSnakeNumber : -1)) {
+              wasSafeSnake = true;
+              message += ` Landed on your OWN snake at ${snake.head}! Immune!`;
+            } else {
+              newPos = snake.tail;
+              message += ` Bitten by a snake! Slide down from ${snake.head} to ${snake.tail}.`;
+            }
           }
         }
       }
