@@ -296,3 +296,80 @@ export function calculateNewPosition(currentPos, diceValue, board, player, gameM
 
   return { position: newPos, message, wasSafeSnake, grantsAnotherTurn, updatedAttempts };
 }
+
+export function shuffleBoardElements(currentBoard, numSnakes = 3, numLadders = 5, gameMode = "shuffle-snake", shuffleSnakes = true, shuffleLadders = false) {
+  const snakes = [];
+  let ladders = currentBoard.ladders || [];
+  const usedCells = new Set([1, 100]); // 1 and 100 cannot be start/end points
+  const snakeHeads = new Set();
+
+  const getRandomCell = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+  const causesSequenceOfThree = (h, existingHeads) => {
+    if (existingHeads.has(h - 1) && existingHeads.has(h - 2)) return true;
+    if (existingHeads.has(h - 1) && existingHeads.has(h + 1)) return true;
+    if (existingHeads.has(h + 1) && existingHeads.has(h + 2)) return true;
+    return false;
+  };
+
+  // If we need to shuffle ladders too, regenerate them!
+  if (shuffleLadders) {
+    ladders = [];
+    for (let i = 0; i < numLadders; i++) {
+      let bottom = 0, top = 0;
+      let attempts = 0;
+      while (attempts < 100) {
+        bottom = getRandomCell(2, 85);
+        top = getRandomCell(bottom + 10, 99);
+        if (!usedCells.has(bottom) && !usedCells.has(top)) {
+          usedCells.add(bottom);
+          usedCells.add(top);
+          ladders.push({ bottom, top });
+          break;
+        }
+        attempts++;
+      }
+    }
+  } else {
+    // Keep existing ladders and add them to usedCells
+    ladders.forEach(l => {
+      usedCells.add(l.bottom);
+      usedCells.add(l.top);
+    });
+  }
+
+  // Generate new snakes
+  if (shuffleSnakes) {
+    // Guarantee at least 1 or 2 snakes starting between 91 and 99 (like in standard mode)
+    const topRowSnakesNeeded = Math.min(numSnakes, Math.floor(Math.random() * 2) + 1);
+
+    for (let i = 0; i < numSnakes; i++) {
+      let head = 0, tail = 0;
+      let attempts = 0;
+      const mustBeTopRow = i < topRowSnakesNeeded;
+
+      while (attempts < 100) {
+        head = mustBeTopRow ? getRandomCell(91, 99) : getRandomCell(15, 99);
+        tail = getRandomCell(2, head - 10);
+        if (!usedCells.has(head) && !usedCells.has(tail) && !causesSequenceOfThree(head, snakeHeads)) {
+          usedCells.add(head);
+          usedCells.add(tail);
+          snakes.push({ head, tail });
+          snakeHeads.add(head);
+          break;
+        }
+        attempts++;
+      }
+    }
+  } else {
+    // Keep existing snakes (won't happen in shuffle-snake mode, but safe fallback)
+    snakes.push(...(currentBoard.snakes || []));
+  }
+
+  return { snakes, ladders };
+}
+
+export function shuffleSnakes(currentBoard, numSnakes = 3, gameMode = "shuffle-snake") {
+  return shuffleBoardElements(currentBoard, numSnakes, currentBoard.ladders?.length || 5, gameMode, true, false);
+}
+

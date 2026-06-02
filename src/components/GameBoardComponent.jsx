@@ -136,6 +136,47 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
         .status-bubble {
           animation: status-bounce 1.2s infinite ease-in-out;
         }
+
+        /* Premium line-drawing & blur-brightness flash board-shuffle animations */
+        .board-shuffle-container {
+          animation: board-shuffle-in 0.95s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+          transform-origin: center;
+        }
+        @keyframes board-shuffle-in {
+          0% {
+            opacity: 0;
+            transform: scale(0.96);
+            filter: blur(8px) brightness(2.2);
+          }
+          50% {
+            filter: blur(3px) brightness(1.4);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+            filter: blur(0px) brightness(1);
+          }
+        }
+
+        .shuffle-flash-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: radial-gradient(circle, rgba(255,255,255,0.96) 0%, rgba(139,92,246,0.35) 50%, rgba(0,0,0,0) 100%);
+          mix-blend-mode: screen;
+          pointer-events: none;
+          z-index: 100;
+          opacity: 0;
+          border-radius: 16px;
+          animation: shuffle-flash-pulse 1.2s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+        }
+        @keyframes shuffle-flash-pulse {
+          0% { opacity: 0; transform: scale(0.85); filter: blur(4px); }
+          15% { opacity: 1; transform: scale(1.04); filter: blur(0px); }
+          100% { opacity: 0; transform: scale(1.15); filter: blur(15px); }
+        }
       `}</style>
 
       {/* Draw Cell Backgrounds */}
@@ -198,6 +239,8 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
 
       {/* Draw Snakes and Ladders using SVG */}
       <svg 
+        key={board?.completedRounds || 0}
+        className="board-shuffle-container"
         style={{ position: "absolute", top: 0, left: 0, width: "100%", height: boardSize, pointerEvents: "none", zIndex: 5 }}
       >
         {/* Ladders */}
@@ -1811,6 +1854,9 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
           </div>
         );
       })}
+      {board?.completedRounds > 0 && (
+        <div key={`flash-${board.completedRounds}`} className="shuffle-flash-overlay" />
+      )}
     </div>
   );
 }

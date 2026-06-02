@@ -38,7 +38,7 @@ class LudoErrorBoundary extends Component {
 }
 import GameBoardComponent from "./components/GameBoardComponent";
 import LobbyComponent from "./components/LobbyComponent";
-import { generateBoard, rollDice, calculateNewPosition } from "./lib/gameLogic.js";
+import { generateBoard, rollDice, calculateNewPosition, shuffleSnakes, shuffleBoardElements } from "./lib/gameLogic.js";
 import { supabase } from "./lib/supabase";
 import PlayerCornerCard from "./components/PlayerCornerCard";
 import ModeSelectionComponent from "./components/ModeSelectionComponent";
@@ -308,6 +308,7 @@ export default function App() {
       return saved ? JSON.parse(saved) : 3;
     } catch { return 3; }
   });
+  const [shuffleInterval, setShuffleInterval] = useState(1);
   const [setupLaddersCount, setSetupLaddersCount] = useState(() => {
     try {
       const saved = localStorage.getItem("snake_game_setupLaddersCount");
@@ -404,6 +405,25 @@ export default function App() {
       playVictorySound();
     }
   }, [winner]);
+
+  // Universal shifting-ground collision sound triggers on shuffle position changes
+  const prevPositionsRef = useRef({});
+  useEffect(() => {
+    if (!players || players.length === 0) return;
+    players.forEach(p => {
+      const prevPos = prevPositionsRef.current[p.id];
+      if (prevPos !== undefined && prevPos !== p.position) {
+        if (!isRollingRef.current && !isDiceRollingRef.current && prevPos > 0 && p.position > 0) {
+          if (p.position < prevPos) {
+            playSnakeBiteSound();
+          } else if (p.position > prevPos) {
+            playLadderSound();
+          }
+        }
+      }
+      prevPositionsRef.current[p.id] = p.position;
+    });
+  }, [players]);
 
   useEffect(() => {
     if (ludoWinner) {
@@ -538,7 +558,7 @@ export default function App() {
     return result;
   };
 
-  const handleCreateOnlineRoom = async ({ hostName, hostColor, hostSnake, theme, customElements, snakesCount, laddersCount }) => {
+  const handleCreateOnlineRoom = async ({ hostName, hostColor, hostSnake, theme, customElements, snakesCount, laddersCount, shuffleInterval = 1 }) => {
     setIsConnecting(true);
     try {
       const code = generateRoomCode();
@@ -2067,9 +2087,10 @@ export default function App() {
   };
 
   // --- Game Control Actions ---
-  const startGame = (setupPlayers, numSnakes = 3, numLadders = 5, selectedTheme = "classic") => {
+  const startGame = (setupPlayers, numSnakes = 3, numLadders = 5, selectedTheme = "classic", shuffleInt = 1, shuffleLads = false) => {
     setSetupSnakesCount(numSnakes);
     setSetupLaddersCount(numLadders);
+    setShuffleInterval(shuffleInt);
     const initialPlayers = setupPlayers.map(p => ({
       ...p,
       snakeBiteCount: 0,
@@ -2081,7 +2102,13 @@ export default function App() {
     }));
     setPlayers(initialPlayers);
     const playerSnakeHeads = gameMode === "own-snake" ? setupPlayers.map(p => p.ownSnakeNumber) : [];
-    setBoard(generateBoard(playerSnakeHeads, numSnakes, numLadders, gameMode));
+    const generated = generateBoard(playerSnakeHeads, numSnakes, numLadders, gameMode);
+    if (gameMode === "shuffle-snake") {
+      generated.shuffleInterval = shuffleInt;
+      generated.shuffleLadders = shuffleLads;
+      generated.completedRounds = 0;
+    }
+    setBoard(generated);
     setInGame(true);
     setCurrentTurnIndex(0);
     setLogs(["Game started!"]);
@@ -2089,7 +2116,7 @@ export default function App() {
     setActiveTheme(selectedTheme);
   };
 
-  const handleStartOnlineGame = async (finalSnakes, finalLadders, selectedTheme) => {
+  const handleStartOnlineGame = async (finalSnakes, finalLadders, selectedTheme, shuffleInt = 1, shuffleLads = false) => {
     try {
       const { data: game } = await supabase
         .from("games")
@@ -2101,6 +2128,11 @@ export default function App() {
 
       const playerSnakeHeads = gameMode === "own-snake" ? joinedPlayers.map(p => p.ownSnakeNumber) : [];
       const generated = generateBoard(playerSnakeHeads, finalSnakes, finalLadders, gameMode);
+      if (gameMode === "shuffle-snake") {
+        generated.shuffleInterval = shuffleInt;
+        generated.shuffleLadders = shuffleLads;
+        generated.completedRounds = 0;
+      }
 
       const resetPromises = joinedPlayers.map(p => 
         supabase
@@ -2150,6 +2182,11 @@ export default function App() {
 
         const playerSnakeHeads = gameMode === "own-snake" ? players.map(p => p.ownSnakeNumber) : [];
         const generated = generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount, gameMode);
+        if (gameMode === "shuffle-snake") {
+          generated.shuffleInterval = board ? board.shuffleInterval : 1;
+          generated.shuffleLadders = board ? board.shuffleLadders : false;
+          generated.completedRounds = 0;
+        }
 
         const resetPromises = players.map(p => 
           supabase
@@ -2192,7 +2229,13 @@ export default function App() {
     }));
     setPlayers(resetPlayers);
     const playerSnakeHeads = gameMode === "own-snake" ? resetPlayers.map(p => p.ownSnakeNumber) : [];
-    setBoard(generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount, gameMode));
+    const generated = generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount, gameMode);
+    if (gameMode === "shuffle-snake") {
+      generated.shuffleInterval = board ? board.shuffleInterval : 1;
+      generated.shuffleLadders = board ? board.shuffleLadders : false;
+      generated.completedRounds = 0;
+    }
+    setBoard(generated);
     setInGame(true);
     setCurrentTurnIndex(0);
     setLogs(["Match restarted! Go, go, go! 🚀"]);
@@ -2697,6 +2740,110 @@ export default function App() {
       });
     }
 
+    const nextTurnIndex = grantsAnotherTurn ? currentTurnIndex : (currentTurnIndex + 1) % players.length;
+    const isRoundCompleted = !grantsAnotherTurn && nextTurnIndex === 0;
+
+    let nextBoardLocal = board;
+    let localPlayersUpdated = [...players];
+    
+    if (gameMode === "shuffle-snake" && isRoundCompleted && board) {
+      const newRounds = (board.completedRounds || 0) + 1;
+      const shouldShuffle = (newRounds % (board.shuffleInterval || 1) === 0);
+      if (shouldShuffle) {
+        nextBoardLocal = shuffleBoardElements(board, setupSnakesCount || 3, setupLaddersCount || 5, gameMode, true, board.shuffleLadders);
+        
+        let shuffledText = board.shuffleLadders 
+          ? "🌀 Shifting ground! Snakes and Ladders have rotated positions!" 
+          : "🌀 Shifting ground! Snakes have shuffled positions!";
+        logMsg = `${shuffledText}\n` + logMsg;
+
+        // Perform immediate collision detection for all players on the board
+        localPlayersUpdated = localPlayersUpdated.map(p => {
+          let startCheckPos = p.position;
+          // If p is the active player who just rolled, start checking from their NEW turn position!
+          if (p.id === player.id) {
+            startCheckPos = currentPos;
+          }
+
+          if (startCheckPos > 0 && startCheckPos < 100) {
+            let finalPos = startCheckPos;
+            let updatedBiteCount = p.snakeBiteCount || 0;
+            let hasBeenBitten = p.hasBeenBittenBySnake || false;
+
+            // 1. Check newly shuffled snakes
+            const snake = nextBoardLocal.snakes.find(s => s.head === startCheckPos);
+            if (snake) {
+              const isOwnSnake = gameMode !== "classic" && startCheckPos === p.ownSnakeNumber;
+              const isSecretlyImmune = updatedBiteCount >= 5;
+
+              if (isOwnSnake) {
+                logMsg += `\n🛡️ ${p.name} landed on their own immune snake at ${snake.head}! Safe!`;
+              } else if (isSecretlyImmune) {
+                logMsg += `\n🛡️ ${p.name} has already been bitten 5 times! Secretly immune!`;
+              } else {
+                finalPos = snake.tail;
+                updatedBiteCount += 1;
+                hasBeenBitten = true;
+                logMsg += `\n💥 Shifting ground! ${p.name} was swallowed by a new snake head at ${snake.head} and slid down to ${snake.tail}!`;
+              }
+            }
+
+            // 2. Check newly shuffled ladders
+            const ladder = nextBoardLocal.ladders.find(l => l.bottom === startCheckPos);
+            if (ladder) {
+              finalPos = ladder.top;
+              logMsg += `\n🚀 Shifting ground! A new ladder appeared under ${p.name} at ${ladder.bottom} and boosted them to ${ladder.top}!`;
+            }
+
+            return {
+              ...p,
+              position: finalPos,
+              snakeBiteCount: updatedBiteCount,
+              hasBeenBittenBySnake: hasBeenBitten,
+              unlockAttempts: p.id === player.id ? updatedAttempts : p.unlockAttempts,
+              lastRoll: p.id === player.id ? roll : p.lastRoll
+            };
+          } else if (p.id === player.id) {
+            return {
+              ...p,
+              position: currentPos,
+              unlockAttempts: updatedAttempts,
+              lastRoll: roll
+            };
+          }
+          return p;
+        });
+
+      } else {
+        nextBoardLocal = { ...board };
+        localPlayersUpdated = localPlayersUpdated.map(p => 
+          p.id === player.id 
+            ? { ...p, position: currentPos, unlockAttempts: updatedAttempts, lastRoll: roll } 
+            : p
+        );
+      }
+      nextBoardLocal.shuffleInterval = board.shuffleInterval;
+      nextBoardLocal.shuffleLadders = board.shuffleLadders;
+      nextBoardLocal.completedRounds = newRounds;
+      setBoard(nextBoardLocal);
+      setPlayers(localPlayersUpdated);
+    } else {
+      localPlayersUpdated = localPlayersUpdated.map(p => 
+        p.id === player.id 
+          ? { ...p, position: currentPos, unlockAttempts: updatedAttempts, lastRoll: roll } 
+          : p
+      );
+      setPlayers(localPlayersUpdated);
+    }
+
+    if (!isOnline && isRoundCompleted && gameMode === "shuffle-snake") {
+      try {
+        localStorage.setItem("snake_game_board", JSON.stringify(nextBoardLocal));
+      } catch (e) {
+        console.error("Failed to persist shuffled board state:", e);
+      }
+    }
+
     if (currentPos === 100) {
       setWinner(currentPlayer);
       addLog(`🎉 ${player.name} wins the game! 🎉`);
@@ -2716,18 +2863,8 @@ export default function App() {
           .single();
 
         if (game) {
-          await supabase
-            .from("game_players")
-            .update({
-              position: currentPos,
-              unlock_attempts: updatedAttempts,
-              last_roll: roll
-            })
-            .eq("game_id", game.id)
-            .eq("client_player_id", player.id);
-
-          const nextTurnIndex = grantsAnotherTurn ? currentTurnIndex : (currentTurnIndex + 1) % players.length;
-          const updatedLogs = [`${player.name}: ${logMsg}`, ...logs].slice(0, 5);
+          let hasShuffledAndSyncedCurrentPlayer = false;
+          let updatedLogs = [`${player.name}: ${logMsg}`, ...logs].slice(0, 5);
           
           const updatePayload = {
             current_turn_index: nextTurnIndex,
@@ -2735,9 +2872,105 @@ export default function App() {
             logs: updatedLogs
           };
 
+          if (isHost && isRoundCompleted && gameMode === "shuffle-snake" && board) {
+            const newRounds = (board.completedRounds || 0) + 1;
+            const shouldShuffle = (newRounds % (board.shuffleInterval || 1) === 0);
+            let nextBoardOnline;
+            
+            if (shouldShuffle) {
+              hasShuffledAndSyncedCurrentPlayer = true;
+              nextBoardOnline = shuffleBoardElements(board, setupSnakesCount || 3, setupLaddersCount || 5, gameMode, true, board.shuffleLadders);
+              
+              let shuffledText = board.shuffleLadders 
+                ? "🌀 Shifting ground! Snakes and Ladders have rotated positions!" 
+                : "🌀 Shifting ground! Snakes have shuffled positions!";
+              updatedLogs = [shuffledText, ...updatedLogs].slice(0, 5);
+
+              const playerUpdates = playersRef.current.map(async (p) => {
+                let startCheckPos = p.position;
+                if (p.id === player.id) {
+                  startCheckPos = currentPos;
+                }
+
+                if (startCheckPos > 0 && startCheckPos < 100) {
+                  let finalPos = startCheckPos;
+                  let updatedBiteCount = p.snakeBiteCount || 0;
+                  let hasBeenBitten = p.hasBeenBittenBySnake || false;
+
+                  // 1. Check newly shuffled snakes
+                  const snake = nextBoardOnline.snakes.find(s => s.head === startCheckPos);
+                  if (snake) {
+                    const isOwnSnake = gameMode !== "classic" && startCheckPos === p.ownSnakeNumber;
+                    const isSecretlyImmune = updatedBiteCount >= 5;
+
+                    if (!isOwnSnake && !isSecretlyImmune) {
+                      finalPos = snake.tail;
+                      updatedBiteCount += 1;
+                      hasBeenBitten = true;
+                      updatedLogs = [`💥 Shifting ground! ${p.name} was swallowed by a new snake head at ${snake.head} and slid down to ${snake.tail}!`, ...updatedLogs].slice(0, 5);
+                    }
+                  }
+
+                  // 2. Check newly shuffled ladders
+                  const ladder = nextBoardOnline.ladders.find(l => l.bottom === startCheckPos);
+                  if (ladder) {
+                    finalPos = ladder.top;
+                    updatedLogs = [`🚀 Shifting ground! A new ladder appeared under ${p.name} at ${ladder.bottom} and boosted them to ${ladder.top}!`, ...updatedLogs].slice(0, 5);
+                  }
+
+                  const isCurrentPlayer = p.id === player.id;
+                  const upd = {
+                    position: finalPos,
+                    unlock_attempts: isCurrentPlayer ? updatedAttempts : p.unlockAttempts,
+                    last_roll: isCurrentPlayer ? roll : p.lastRoll
+                  };
+                  return supabase
+                    .from("game_players")
+                    .update(upd)
+                    .eq("game_id", game.id)
+                    .eq("client_player_id", p.id);
+                } else if (p.id === player.id) {
+                  // Current player was at home (position 0), update their unlock attempts/roll
+                  const upd = {
+                    position: currentPos,
+                    unlock_attempts: updatedAttempts,
+                    last_roll: roll
+                  };
+                  return supabase
+                    .from("game_players")
+                    .update(upd)
+                    .eq("game_id", game.id)
+                    .eq("client_player_id", p.id);
+                }
+                return null;
+              }).filter(Boolean);
+              await Promise.all(playerUpdates);
+
+            } else {
+              nextBoardOnline = { ...board };
+            }
+            nextBoardOnline.shuffleInterval = board.shuffleInterval;
+            nextBoardOnline.shuffleLadders = board.shuffleLadders;
+            nextBoardOnline.completedRounds = newRounds;
+            updatePayload.board = nextBoardOnline;
+            updatePayload.logs = updatedLogs;
+          }
+
           if (currentPos === 100) {
             updatePayload.winner_id = player.id;
             updatePayload.status = "finished";
+          }
+
+          if (!hasShuffledAndSyncedCurrentPlayer) {
+            await supabase
+              .from("game_players")
+              .update({
+                position: currentPos,
+                unlock_attempts: updatedAttempts,
+                last_roll: roll
+              })
+              .eq("game_id", game.id)
+              .eq("client_player_id", player.id);
           }
 
           await supabase
@@ -3211,6 +3444,7 @@ export default function App() {
                   {gameMode === "own-snake" && "Own-Snake Mode 👑"}
                   {gameMode === "negative-snake" && "Negative Snake Mode 🐍"}
                   {gameMode === "beast-snakes" && "Beast-Snakes Mode 🦖"}
+                  {gameMode === "shuffle-snake" && "Shuffle Snake Mode 🌀"}
                 </span>
                 <button
                   onClick={() => handleShowRules(gameMode)}

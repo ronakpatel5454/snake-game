@@ -28,6 +28,13 @@ export const GAME_MODES = [
     badge: "Active"
   },
   {
+    id: "shuffle-snake",
+    title: "Shuffle Snake Mode 🌀",
+    description: "Traditional race rules, but all snakes' coordinates shuffle periodically! Customize the shuffle interval in rounds.",
+    active: true,
+    badge: "Active"
+  },
+  {
     id: "championship",
     title: "Championship Mode 🏆",
     description: "Ranked multiplayer with timed turns, hazard cells, and competitive match lobbies.",

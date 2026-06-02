@@ -37,6 +37,12 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
       glow: "rgba(244, 63, 94, 0.3)"
     },
     {
+      id: "shuffle-snake",
+      title: "Shuffle Snake 🌀",
+      color: "var(--p1-color)",
+      glow: "rgba(239, 68, 68, 0.3)"
+    },
+    {
       id: "ludo",
       title: "Ludo Rules 👑",
       color: "var(--secondary)",
@@ -196,6 +202,39 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
                 <span style={{ fontSize: "1.2rem", color: "#ec4899" }}>🌈</span>
                 <div>
                   <strong>Rainbow Boa (Blessed Snake):</strong> Head is on 15-35, Tail is on 60-80. Landing on it <strong>boosts you UP</strong> the board and awards you an <strong>extra roll</strong>!
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "shuffle-snake":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ background: "rgba(239, 68, 68, 0.1)", borderLeft: "4px solid var(--p1-color)", padding: "1rem", borderRadius: "8px" }}>
+              <strong style={{ color: "white", fontSize: "1.05rem" }}>The Shifting Serpentine Maze</strong>
+              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                Snakes do not stay still! Every N player rounds, coordinates vanish and reappear in brand new cells, shifting the ground beneath you!
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", color: "var(--text-main)", fontSize: "0.95rem" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "var(--p1-color)" }}>🌀</span>
+                <div>
+                  <strong>Snakes Shuffle & Shifting Ground:</strong> Once N rounds complete, all snakes randomly reposition. If a new snake head lands exactly on your token, you are **immediately bitten** and slide down to the tail!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "var(--p3-color)" }}>🪜</span>
+                <div>
+                  <strong>Ladders Shuffling (Optional):</strong> If enabled in the lobby, ladders will also shift positions! If a new ladder bottom lands exactly on your token, you **immediately climb** to the top!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "var(--accent)" }}>⚙️</span>
+                <div>
+                  <strong>Interval & Customization:</strong> Configure the shuffle frequency (1 to 5 rounds) and choose whether ladders also rotate or remain static in the lobby settings.
                 </div>
               </div>
             </div>

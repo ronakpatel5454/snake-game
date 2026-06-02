@@ -36,6 +36,8 @@ export default function LobbyComponent({
   const [numSnakes, setNumSnakes] = useState("3");
   const [numLadders, setNumLadders] = useState("5");
   const [customBoardElements, setCustomBoardElements] = useState(false);
+  const [shuffleInterval, setShuffleInterval] = useState(1);
+  const [shuffleLadders, setShuffleLadders] = useState(false);
 
   // Parse and compute validation errors in real-time
   const minSnakes = gameMode === "beast-snakes" ? 0 : 3;
@@ -178,7 +180,7 @@ export default function LobbyComponent({
       lastRoll: 1
     }));
 
-    onStart(finalPlayers, finalSnakes, finalLadders, selectedTheme);
+    onStart(finalPlayers, finalSnakes, finalLadders, selectedTheme, shuffleInterval, shuffleLadders);
   };
 
   // Online Action triggers
@@ -208,7 +210,9 @@ export default function LobbyComponent({
       theme: selectedTheme,
       customElements: customBoardElements,
       snakesCount: numSnakesParsed,
-      laddersCount: numLaddersParsed
+      laddersCount: numLaddersParsed,
+      shuffleInterval: shuffleInterval,
+      shuffleLadders: shuffleLadders
     });
   };
 
@@ -263,7 +267,7 @@ export default function LobbyComponent({
       }
     }
 
-    onStartOnlineGame(finalSnakes, finalLadders, selectedTheme);
+    onStartOnlineGame(finalSnakes, finalLadders, selectedTheme, shuffleInterval, shuffleLadders);
   };
 
   const handleCopyLink = () => {
@@ -447,6 +451,49 @@ export default function LobbyComponent({
                       <input type="number" min="0" max="10" value={numLadders} onChange={(e) => handleLaddersChange(e.target.value)} style={{ width: "100%" }} />
                     </div>
                   </div>
+                )}
+
+                {gameMode === "shuffle-snake" && (
+                  <>
+                    <div style={{ marginBottom: "1.5rem" }}>
+                      <label style={{ display: "block", marginBottom: "0.5rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                        🌀 Shuffle Interval (1 - 5 Rounds)
+                      </label>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        max="5" 
+                        value={shuffleInterval} 
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 1;
+                          setShuffleInterval(Math.min(5, Math.max(1, val)));
+                        }} 
+                        style={{ width: "100%" }} 
+                      />
+                    </div>
+                    <div style={{ 
+                      display: "flex", 
+                      alignItems: "center", 
+                      gap: "10px", 
+                      marginBottom: "1.5rem", 
+                      background: "rgba(255,255,255,0.04)", 
+                      padding: "0.75rem 1rem", 
+                      borderRadius: "12px", 
+                      border: "1.5px solid rgba(255,255,255,0.06)",
+                      userSelect: "none"
+                    }}>
+                      <input 
+                        type="checkbox" 
+                        id="shuffle-ladders-online-toggle"
+                        checked={shuffleLadders}
+                        onChange={(e) => setShuffleLadders(e.target.checked)}
+                        style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "var(--p1-color)" }}
+                      />
+                      <label htmlFor="shuffle-ladders-online-toggle" style={{ fontSize: "0.85rem", fontWeight: "bold", color: "white", cursor: "pointer", flex: 1 }}>
+                        🔄 Also shuffle ladders?
+                      </label>
+                    </div>
+                  </>
                 )}
 
                 {/* Theme Selector */}
@@ -793,6 +840,49 @@ export default function LobbyComponent({
                 )}
               </div>
             </div>
+          )}
+
+          {gameMode === "shuffle-snake" && (
+            <>
+              <div style={{ marginBottom: "1.5rem" }}>
+                <label style={{ display: "block", marginBottom: "0.5rem", color: "var(--text-muted)", fontSize: "0.95rem" }}>
+                  🌀 Shuffle Interval (1 - 5 Rounds)
+                </label>
+                <input 
+                  type="number" 
+                  min="1" 
+                  max="5" 
+                  value={shuffleInterval} 
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    setShuffleInterval(Math.min(5, Math.max(1, val)));
+                  }} 
+                  style={{ width: "100%" }} 
+                />
+              </div>
+              <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: "10px", 
+                marginBottom: "1.5rem", 
+                background: "rgba(255,255,255,0.04)", 
+                padding: "0.75rem 1rem", 
+                borderRadius: "12px", 
+                border: "1.5px solid rgba(255,255,255,0.06)",
+                userSelect: "none"
+              }}>
+                <input 
+                  type="checkbox" 
+                  id="shuffle-ladders-toggle"
+                  checked={shuffleLadders}
+                  onChange={(e) => setShuffleLadders(e.target.checked)}
+                  style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "var(--p1-color)" }}
+                />
+                <label htmlFor="shuffle-ladders-toggle" style={{ fontSize: "0.9rem", fontWeight: "bold", color: "white", cursor: "pointer", flex: 1 }}>
+                  🔄 Also shuffle ladders?
+                </label>
+              </div>
+            </>
           )}
 
           <div style={{ marginBottom: "2rem", marginTop: "1rem" }}>
