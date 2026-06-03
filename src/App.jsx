@@ -2364,6 +2364,7 @@ export default function App() {
       roll = isGuaranteedSix ? 6 : rollDice();
     }
 
+    /*
     // Secret rule: if player already has 5 or more snake bites, prevent landing on a penalty cell!
     if (activeGame === "snake-ladder" && (player.snakeBiteCount || 0) >= 5 && player.unlockAttempts !== 100) {
       const invalidRolls = new Set();
@@ -2403,6 +2404,7 @@ export default function App() {
         }
       }
     }
+    */
 
     // Forced snake bite logic near the end of the board (Issue 1) - COMMENTED OUT PER USER REQUEST
     let isForcedBackwards = false;
@@ -2746,7 +2748,7 @@ export default function App() {
     const isRoundCompleted = !grantsAnotherTurn && nextTurnIndex === 0;
 
     let nextBoardLocal = board;
-    let localPlayersUpdated = [...players];
+    let localPlayersUpdated = [...playersRef.current];
     
     if (gameMode === "shuffle-snake" && isRoundCompleted && board) {
       const newRounds = (board.completedRounds || 0) + 1;
@@ -2776,12 +2778,16 @@ export default function App() {
             const snake = nextBoardLocal.snakes.find(s => s.head === startCheckPos);
             if (snake) {
               const isOwnSnake = gameMode !== "classic" && startCheckPos === p.ownSnakeNumber;
+              /*
               const isSecretlyImmune = updatedBiteCount >= 5;
+              */
 
               if (isOwnSnake) {
                 logMsg += `\n🛡️ ${p.name} landed on their own immune snake at ${snake.head}! Safe!`;
+              /*
               } else if (isSecretlyImmune) {
                 logMsg += `\n🛡️ ${p.name} has already been bitten 5 times! Secretly immune!`;
+              */
               } else {
                 finalPos = snake.tail;
                 updatedBiteCount += 1;
@@ -2803,14 +2809,22 @@ export default function App() {
               snakeBiteCount: updatedBiteCount,
               hasBeenBittenBySnake: hasBeenBitten,
               unlockAttempts: p.id === player.id ? updatedAttempts : p.unlockAttempts,
-              lastRoll: p.id === player.id ? roll : p.lastRoll
+              lastRoll: p.id === player.id ? roll : p.lastRoll,
+              isWalking: p.id === player.id ? false : (p.isWalking || false),
+              isClimbing: p.id === player.id ? false : (p.isClimbing || false),
+              isSwallowed: p.id === player.id ? false : (p.isSwallowed || false),
+              isPanicking: p.id === player.id ? false : (p.isPanicking || false)
             };
           } else if (p.id === player.id) {
             return {
               ...p,
               position: currentPos,
               unlockAttempts: updatedAttempts,
-              lastRoll: roll
+              lastRoll: roll,
+              isWalking: false,
+              isClimbing: false,
+              isSwallowed: false,
+              isPanicking: false
             };
           }
           return p;
@@ -2820,7 +2834,16 @@ export default function App() {
         nextBoardLocal = { ...board };
         localPlayersUpdated = localPlayersUpdated.map(p => 
           p.id === player.id 
-            ? { ...p, position: currentPos, unlockAttempts: updatedAttempts, lastRoll: roll } 
+            ? { 
+                ...p, 
+                position: currentPos, 
+                unlockAttempts: updatedAttempts, 
+                lastRoll: roll,
+                isWalking: false,
+                isClimbing: false,
+                isSwallowed: false,
+                isPanicking: false
+              } 
             : p
         );
       }
@@ -2832,7 +2855,16 @@ export default function App() {
     } else {
       localPlayersUpdated = localPlayersUpdated.map(p => 
         p.id === player.id 
-          ? { ...p, position: currentPos, unlockAttempts: updatedAttempts, lastRoll: roll } 
+          ? { 
+              ...p, 
+              position: currentPos, 
+              unlockAttempts: updatedAttempts, 
+              lastRoll: roll,
+              isWalking: false,
+              isClimbing: false,
+              isSwallowed: false,
+              isPanicking: false
+            } 
           : p
       );
       setPlayers(localPlayersUpdated);
@@ -2903,9 +2935,11 @@ export default function App() {
                   const snake = nextBoardOnline.snakes.find(s => s.head === startCheckPos);
                   if (snake) {
                     const isOwnSnake = gameMode !== "classic" && startCheckPos === p.ownSnakeNumber;
+                    /*
                     const isSecretlyImmune = updatedBiteCount >= 5;
+                    */
 
-                    if (!isOwnSnake && !isSecretlyImmune) {
+                    if (!isOwnSnake) { // Removed: && !isSecretlyImmune
                       finalPos = snake.tail;
                       updatedBiteCount += 1;
                       hasBeenBitten = true;
@@ -3430,7 +3464,7 @@ export default function App() {
             {/* Game Board Tabletop Container */}
             <div style={{ flex: "1", minWidth: "300px", display: "flex", flexDirection: "column", alignItems: "center" }}>
               <h1 className="title-glow" style={{ fontSize: "2rem", marginBottom: "0.25rem" }}>Snake Ladder</h1>
-              <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center", marginBottom: "1.5rem" }}>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center", marginBottom: "1.5rem", flexWrap: "wrap" }}>
                 <span style={{
                   fontSize: "0.8rem",
                   fontWeight: "bold",
@@ -3448,6 +3482,34 @@ export default function App() {
                   {gameMode === "beast-snakes" && "Beast-Snakes Mode 🦖"}
                   {gameMode === "shuffle-snake" && "Shuffle Snake Mode 🌀"}
                 </span>
+                {board && (
+                  <span style={{
+                    fontSize: "0.8rem",
+                    fontWeight: "bold",
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    padding: "4px 12px",
+                    borderRadius: "16px",
+                    color: "var(--text-light)",
+                    letterSpacing: "0.5px"
+                  }}>
+                    Round: {(board.completedRounds || 0) + 1}
+                  </span>
+                )}
+                {board && gameMode === "shuffle-snake" && (
+                  <span style={{
+                    fontSize: "0.8rem",
+                    fontWeight: "bold",
+                    background: "rgba(139, 92, 246, 0.15)",
+                    border: "1px solid rgba(139, 92, 246, 0.4)",
+                    padding: "4px 12px",
+                    borderRadius: "16px",
+                    color: "#a78bfa",
+                    letterSpacing: "0.5px"
+                  }}>
+                    🌀 Next Shuffle: Round {Math.ceil(((board.completedRounds || 0) + 1) / (board.shuffleInterval || 1)) * (board.shuffleInterval || 1)}
+                  </span>
+                )}
                 <button
                   onClick={() => handleShowRules(gameMode)}
                   style={{
@@ -3522,8 +3584,19 @@ export default function App() {
                             }}
                           >
                             <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: p.color }} />
-                            <span style={{ fontSize: "0.75rem", fontWeight: isActive ? "bold" : "normal", color: isActive ? "white" : "var(--text-muted)" }}>
+                            <span style={{ 
+                              fontSize: "0.75rem", 
+                              fontWeight: isActive ? "bold" : "normal", 
+                              color: isActive ? "white" : "var(--text-muted)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px"
+                            }}>
                               {p.name}: {p.position}
+                              <span style={{ fontSize: "0.68rem", opacity: 0.85, background: "rgba(0,0,0,0.2)", padding: "1px 5px", borderRadius: "6px" }}>🐍{p.snakeBiteCount || 0}</span>
+                              {p.consecutiveSixes > 0 && (
+                                <span style={{ color: "#ff8c00", fontWeight: "bold", fontSize: "0.68rem" }}>🔥{p.consecutiveSixes}x6</span>
+                              )}
                             </span>
                           </div>
                         );
@@ -3554,8 +3627,22 @@ export default function App() {
                       >
                         <div style={{ display: "flex", flexDirection: "column", gap: "2px", textAlign: "left" }}>
                           <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Active Turn</div>
-                          <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: players[currentTurnIndex]?.color }}>
-                            {players[currentTurnIndex]?.name} {players[currentTurnIndex]?.isBot && "🤖"}
+                          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                            <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: players[currentTurnIndex]?.color }}>
+                              {players[currentTurnIndex]?.name} {players[currentTurnIndex]?.isBot && "🤖"}
+                            </div>
+                            <span style={{ 
+                              fontSize: "0.75rem", 
+                              fontWeight: "bold",
+                              background: "rgba(0,0,0,0.2)", 
+                              padding: "2px 6px", 
+                              borderRadius: "8px", 
+                              color: "var(--text-light)",
+                              display: "flex",
+                              alignItems: "center"
+                            }}>
+                              🐍 {players[currentTurnIndex]?.snakeBiteCount || 0}
+                            </span>
                           </div>
                           {players[currentTurnIndex]?.isBot ? (
                             <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", animation: "pulse 1.5s infinite" }}>🤖 Thinking...</div>

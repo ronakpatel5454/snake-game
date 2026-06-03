@@ -6,6 +6,26 @@ import { THEME_CONFIGS } from "../config/themeConfigs";
 export default function GameBoardComponent({ board, players, gameMode, theme = "classic" }) {
   const containerRef = useRef(null);
   const [boardSize, setBoardSize] = useState(500);
+  const [showShuffleAnim, setShowShuffleAnim] = useState(false);
+  const prevRoundsRef = useRef(board?.completedRounds || 0);
+
+  useEffect(() => {
+    const currentRounds = board?.completedRounds || 0;
+    const prevRounds = prevRoundsRef.current;
+
+    if (currentRounds !== prevRounds) {
+      prevRoundsRef.current = currentRounds;
+
+      const shuffleInterval = board?.shuffleInterval || 1;
+      if (gameMode === "shuffle-snake" && currentRounds > 0 && currentRounds % shuffleInterval === 0) {
+        setShowShuffleAnim(true);
+        const timer = setTimeout(() => {
+          setShowShuffleAnim(false);
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [board?.completedRounds, board?.shuffleInterval, gameMode]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -71,12 +91,14 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
 
   const config = THEME_CONFIGS[theme] || THEME_CONFIGS.classic;
 
+  console.log("DEBUG: board completedRounds:", board?.completedRounds, "shuffleInterval:", board?.shuffleInterval);
+
   return (
-    <div 
+    <div
       ref={containerRef}
-      style={{ 
-        width: "100%", 
-        maxWidth: "600px", 
+      style={{
+        width: "100%",
+        maxWidth: "600px",
         height: boardSize + cellSize * 1.3, // Allocates precise vertical space for Grid (10 rows) + Home Tray (1.3 rows)
         position: "relative",
         background: config.boardBg,
@@ -182,7 +204,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
       {/* Draw Cell Backgrounds */}
       {cells.map((cell) => {
         const { x, y } = getCoordinates(cell);
-        
+
         // 10 columns checkerboard in 5 vertical bands (each band is 2 columns wide)
         const row = Math.floor((cell - 1) / 10);
         let col = (cell - 1) % 10;
@@ -195,7 +217,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
 
         const bandConfig = config.gridBands[band] || config.gridBands[0];
         const cellBg = isDark ? bandConfig.isDark : bandConfig.isLight;
-        
+
         return (
           <div
             key={`cell-bg-${cell}`}
@@ -238,9 +260,9 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
       })}
 
       {/* Draw Snakes and Ladders using SVG */}
-      <svg 
-        key={board?.completedRounds || 0}
-        className="board-shuffle-container"
+      <svg
+        key={gameMode === "shuffle-snake" ? `snakes-ladders-svg-${Math.floor((board?.completedRounds || 0) / (board?.shuffleInterval || 1))}` : "snakes-ladders-svg-static"}
+        className={showShuffleAnim ? "board-shuffle-container" : ""}
         style={{ position: "absolute", top: 0, left: 0, width: "100%", height: boardSize, pointerEvents: "none", zIndex: 5 }}
       >
         {/* Ladders */}
@@ -250,7 +272,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
 
           const dx = end.cx - start.cx;
           const dy = end.cy - start.cy;
-          const len = Math.sqrt(dx*dx + dy*dy) || 1;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
           const ux = dx / len;
           const uy = dy / len;
           const nx = -uy;
@@ -296,7 +318,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                 {/* Neon Rails Glow */}
                 <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#06b6d4" strokeWidth={railWidth * 3.5} strokeLinecap="round" opacity="0.45" />
                 <line x1={rx1} y1={ry1} x2={rx2} y2={ry2} stroke="#06b6d4" strokeWidth={railWidth * 3.5} strokeLinecap="round" opacity="0.45" />
-                
+
                 {/* Neon Rails Core */}
                 <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#22d3ee" strokeWidth={railWidth} strokeLinecap="round" />
                 <line x1={rx1} y1={ry1} x2={rx2} y2={ry2} stroke="#22d3ee" strokeWidth={railWidth} strokeLinecap="round" />
@@ -318,11 +340,11 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                 {/* 3D Shadows */}
                 <line x1={lx1 + 2.5} y1={ly1 + 2.5} x2={lx2 + 2.5} y2={ly2 + 2.5} stroke="rgba(0,0,0,0.3)" strokeWidth={railWidth * 1.5} strokeLinecap="round" />
                 <line x1={rx1 + 2.5} y1={ry1 + 2.5} x2={rx2 + 2.5} y2={ry2 + 2.5} stroke="rgba(0,0,0,0.3)" strokeWidth={railWidth * 1.5} strokeLinecap="round" />
-                
+
                 {/* Wooden Log Rails */}
                 <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#78350f" strokeWidth={railWidth * 1.6} strokeLinecap="round" />
                 <line x1={rx1} y1={ry1} x2={rx2} y2={ry2} stroke="#78350f" strokeWidth={railWidth * 1.6} strokeLinecap="round" />
-                
+
                 {/* Wood Highlight */}
                 <line x1={lx1 - 1} y1={ly1 - 1} x2={lx2 - 1} y2={ly2 - 1} stroke="#92400e" strokeWidth={railWidth * 0.6} strokeLinecap="round" />
                 <line x1={rx1 - 1} y1={ry1 - 1} x2={rx2 - 1} y2={ry2 - 1} stroke="#92400e" strokeWidth={railWidth * 0.6} strokeLinecap="round" />
@@ -333,7 +355,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                     {/* Shadow & Rung Log */}
                     <line x1={r.x1 + 1} y1={r.y1 + 1} x2={r.x2 + 1} y2={r.y2 + 1} stroke="rgba(0,0,0,0.25)" strokeWidth={rungWidth * 1.5} strokeLinecap="round" />
                     <line x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} stroke="#b45309" strokeWidth={rungWidth * 1.5} strokeLinecap="round" />
-                    
+
                     {/* Green vine leaf knots at joint corners! */}
                     <circle cx={r.x1} cy={r.y1} r={cellSize * 0.038} fill="#22c55e" stroke="#15803d" strokeWidth="0.8" />
                     <circle cx={r.x2} cy={r.y2} r={cellSize * 0.038} fill="#22c55e" stroke="#15803d" strokeWidth="0.8" />
@@ -346,23 +368,23 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
               <g key={`ladder-${idx}`}>
                 {/* Translucent Gravity Fields Background */}
                 <line x1={start.cx} y1={start.cy} x2={end.cx} y2={end.cy} stroke="#a855f7" strokeWidth={ladderWidth} strokeLinecap="round" opacity="0.1" />
-                
+
                 {/* Glowing electric laser/stardust rails */}
                 <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#c084fc" strokeWidth={railWidth * 2.5} strokeLinecap="round" opacity="0.3" />
                 <line x1={rx1} y1={ry1} x2={rx2} y2={ry2} stroke="#c084fc" strokeWidth={railWidth * 2.5} strokeLinecap="round" opacity="0.3" />
                 <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#c084fc" strokeWidth={railWidth * 0.8} strokeLinecap="round" />
                 <line x1={rx1} y1={ry1} x2={rx2} y2={ry2} stroke="#c084fc" strokeWidth={railWidth * 0.8} strokeLinecap="round" />
-                
+
                 {/* Cosmic stardust rungs rendering starlight beams */}
                 {rungs.map((r, rIdx) => (
                   <g key={`rung-${rIdx}`}>
                     <line x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} stroke="#6366f1" strokeWidth={rungWidth * 3.5} strokeLinecap="round" opacity="0.45" />
                     <line x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} stroke="#818cf8" strokeWidth={rungWidth * 0.9} strokeLinecap="round" />
-                    
+
                     {/* Centered glowing star sparkler */}
-                    <polygon 
-                      points={`${r.cx},${r.cy - 4} ${r.cx + 1},${r.cy - 1} ${r.cx + 4},${r.cy} ${r.cx + 1},${r.cy + 1} ${r.cx},${r.cy + 4} ${r.cx - 1},${r.cy + 1} ${r.cx - 4},${r.cy} ${r.cx - 1},${r.cy - 1}`} 
-                      fill="#fef08a" 
+                    <polygon
+                      points={`${r.cx},${r.cy - 4} ${r.cx + 1},${r.cy - 1} ${r.cx + 4},${r.cy} ${r.cx + 1},${r.cy + 1} ${r.cx},${r.cy + 4} ${r.cx - 1},${r.cy + 1} ${r.cx - 4},${r.cy} ${r.cx - 1},${r.cy - 1}`}
+                      fill="#fef08a"
                       opacity="0.9"
                     />
                   </g>
@@ -375,7 +397,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                 {/* 3D Rose Gold Shadow */}
                 <line x1={lx1 + 2} y1={ly1 + 2} x2={lx2 + 2} y2={ly2 + 2} stroke="rgba(244, 63, 94, 0.15)" strokeWidth={railWidth * 1.5} strokeLinecap="round" />
                 <line x1={rx1 + 2} y1={ry1 + 2} x2={rx2 + 2} y2={ry2 + 2} stroke="rgba(244, 63, 94, 0.15)" strokeWidth={railWidth * 1.5} strokeLinecap="round" />
-                
+
                 {/* Rose Gold Rails */}
                 <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#fb7185" strokeWidth={railWidth * 1.4} strokeLinecap="round" />
                 <line x1={rx1} y1={ry1} x2={rx2} y2={ry2} stroke="#fb7185" strokeWidth={railWidth * 1.4} strokeLinecap="round" />
@@ -386,11 +408,11 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                 {rungs.map((r, rIdx) => (
                   <g key={`rung-${rIdx}`}>
                     <line x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} stroke="#fda4af" strokeWidth={rungWidth * 1.5} strokeLinecap="round" />
-                    
+
                     {/* Cherry Blossom Flower node overlay on joints! */}
                     <circle cx={r.x1} cy={r.y1} r={cellSize * 0.038} fill="#f43f5e" stroke="#ffe4e6" strokeWidth="0.8" />
                     <circle cx={r.x1} cy={r.y1} r={cellSize * 0.015} fill="#fef08a" />
-                    
+
                     <circle cx={r.x2} cy={r.y2} r={cellSize * 0.038} fill="#f43f5e" stroke="#ffe4e6" strokeWidth="0.8" />
                     <circle cx={r.x2} cy={r.y2} r={cellSize * 0.015} fill="#fef08a" />
                   </g>
@@ -403,7 +425,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                 {/* 3D Shadow */}
                 <line x1={lx1 + 2.5} y1={ly1 + 2.5} x2={lx2 + 2.5} y2={ly2 + 2.5} stroke="rgba(0,0,0,0.25)" strokeWidth={railWidth * 1.5} strokeLinecap="round" />
                 <line x1={rx1 + 2.5} y1={ry1 + 2.5} x2={rx2 + 2.5} y2={ry2 + 2.5} stroke="rgba(0,0,0,0.25)" strokeWidth={railWidth * 1.5} strokeLinecap="round" />
-                
+
                 {/* Bubblegum Chocolate Stick Rails */}
                 <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#f472b6" strokeWidth={railWidth * 1.8} strokeLinecap="round" />
                 <line x1={rx1} y1={ry1} x2={rx2} y2={ry2} stroke="#f472b6" strokeWidth={railWidth * 1.8} strokeLinecap="round" />
@@ -417,7 +439,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                   return (
                     <g key={`rung-${rIdx}`}>
                       <line x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} stroke="#db2777" strokeWidth={rungWidth * 1.8} strokeLinecap="round" />
-                      
+
                       {/* Sprinkles on the rail joints */}
                       <circle cx={r.x1} cy={r.y1} r={cellSize * 0.035} fill={sprinkleColor} stroke="#ffffff" strokeWidth="0.6" />
                       <circle cx={r.x2} cy={r.y2} r={cellSize * 0.035} fill={sprinkleColor} stroke="#ffffff" strokeWidth="0.6" />
@@ -460,10 +482,10 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
           const snakeRenderData = board.snakes.map((snake, idx) => {
             const start = getCoordinates(snake.head);
             const end = getCoordinates(snake.tail);
-            
+
             const dx = end.cx - start.cx;
             const dy = end.cy - start.cy;
-            const len = Math.sqrt(dx*dx + dy*dy) || 1;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
             const ux = dx / len;
             const uy = dy / len;
             const normalX = -uy;
@@ -471,21 +493,21 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
 
             const points = [];
             const numSteps = 35; // Highly optimized for DOM rendering while remaining perfectly smooth
-            
+
             // Lower frequency = lazy, elegant, curved serpentine coils instead of hyper zigzags
             const frequency = len > cellSize * 4 ? 1.8 : 1.2;
-            const amplitude = Math.min(cellSize * 0.48, len * 0.22); 
-            
+            const amplitude = Math.min(cellSize * 0.48, len * 0.22);
+
             for (let i = 0; i <= numSteps; i++) {
               const t = i / numSteps;
               const baseX = start.cx + dx * t;
               const baseY = start.cy + dy * t;
-              
+
               // Sine envelope makes sure offset starts exactly at 0 (head) and ends exactly at 0 (tail)
               const direction = snake.head % 2 === 0 ? 1 : -1;
               const envelope = Math.sin(t * Math.PI);
               const waveOffset = Math.sin(t * Math.PI * frequency) * envelope * amplitude * direction;
-              
+
               points.push({
                 x: baseX + normalX * waveOffset,
                 y: baseY + normalY * waveOffset
@@ -502,8 +524,8 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
             const isCandy = theme === "candy";
 
             // Curated colors matching owner colors or a vibrant classic green
-            let baseColor = ownerPlayer ? ownerPlayer.color : "#22c55e"; 
-            let patternColor = ownerPlayer ? "white" : "#15803d"; 
+            let baseColor = ownerPlayer ? ownerPlayer.color : "#22c55e";
+            let patternColor = ownerPlayer ? "white" : "#15803d";
 
             if (isNeon) {
               baseColor = "#22c55e";
@@ -523,12 +545,12 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
             }
 
             // Base dimensions for the tapered body
-            const bodyWidth = cellSize * 0.22; 
+            const bodyWidth = cellSize * 0.22;
 
             // Calculate precise local tangent vector at the head for tongue and eyes alignment
             const headDx = points[1].x - points[0].x;
             const headDy = points[1].y - points[0].y;
-            const headLen = Math.sqrt(headDx*headDx + headDy*headDy) || 1;
+            const headLen = Math.sqrt(headDx * headDx + headDy * headDy) || 1;
             const headUx = headDx / headLen;
             const headUy = headDy / headLen;
 
@@ -619,15 +641,15 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                   <circle cx={start.cx + headUy * 4.5 - headUx * 2} cy={start.cy - headUx * 4.5 - headUy * 2} r={cellSize * 0.04} fill="#4c0519" />
                   <circle cx={start.cx - headUy * 5.5 - headUx * 2.5} cy={start.cy + headUx * 5.5 - headUy * 2.5} r={cellSize * 0.018} fill="white" />
                   <circle cx={start.cx + headUy * 5.5 - headUx * 2.5} cy={start.cy - headUx * 5.5 - headUy * 2.5} r={cellSize * 0.018} fill="white" />
-                  
+
                   {/* Flower Crown */}
-                  <path 
+                  <path
                     d={`M ${start.cx - headUy * 7 + headUx * 3} ${start.cy + headUx * 7 + headUy * 3} 
                         Q ${start.cx + headUx * 6} ${start.cy + headUy * 6} 
-                          ${start.cx + headUy * 7 + headUx * 3} ${start.cy - headUx * 7 + headUy * 3}`} 
-                    stroke="#eab308" 
-                    strokeWidth="1.5" 
-                    fill="none" 
+                          ${start.cx + headUy * 7 + headUx * 3} ${start.cy - headUx * 7 + headUy * 3}`}
+                    stroke="#eab308"
+                    strokeWidth="1.5"
+                    fill="none"
                   />
                   {/* Blossom Centers */}
                   <circle cx={start.cx + headUx * 5.5} cy={start.cy + headUy * 5.5} r={cellSize * 0.038} fill="#f43f5e" stroke="#eab308" strokeWidth="0.8" />
@@ -643,23 +665,23 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                   <circle cx={start.cx} cy={start.cy} r={bodyWidth * 0.85 + 1.5} fill="#2e1065" />
                   <circle cx={start.cx} cy={start.cy} r={bodyWidth * 0.85} fill="#f472b6" />
                   {/* Cupcake Liner */}
-                  <path 
+                  <path
                     d={`M ${start.cx - headUy * 6.5 + headUx * 4} ${start.cy + headUx * 6.5 + headUy * 4}
                         L ${start.cx - headUy * 4.5 - headUx * 3} ${start.cy + headUx * 4.5 - headUy * 3}
                         L ${start.cx + headUy * 4.5 - headUx * 3} ${start.cy - headUx * 4.5 - headUy * 3}
-                        L ${start.cx + headUy * 6.5 + headUx * 4} ${start.cy - headUx * 6.5 + headUy * 4} Z`} 
-                    fill="#fbcfe8" 
-                    stroke="#db2777" 
-                    strokeWidth="1" 
+                        L ${start.cx + headUy * 6.5 + headUx * 4} ${start.cy - headUx * 6.5 + headUy * 4} Z`}
+                    fill="#fbcfe8"
+                    stroke="#db2777"
+                    strokeWidth="1"
                   />
                   <circle cx={start.cx - headUy * 2.5 + headUx * 1} cy={start.cy + headUx * 2.5 + headUy * 1} r={bodyWidth * 0.45} fill="#ffffff" />
                   <circle cx={start.cx + headUy * 2.5 + headUx * 1} cy={start.cy - headUx * 2.5 + headUy * 1} r={bodyWidth * 0.45} fill="#ffffff" />
                   <circle cx={start.cx + headUx * 3.5} cy={start.cy + headUy * 3.5} r={bodyWidth * 0.4} fill="#f472b6" />
-                  
+
                   {/* Cherry on top */}
                   <circle cx={start.cx + headUx * 7.5} cy={start.cy + headUy * 7.5} r={cellSize * 0.045} fill="#ef4444" stroke="#ffffff" strokeWidth="0.6" />
                   <path d={`M ${start.cx + headUx * 7.5} ${start.cy + headUy * 7.5} Q ${start.cx + headUx * 12} ${start.cy + headUy * 6} ${start.cx + headUx * 11 + headUy * 3}`} stroke="#15803d" strokeWidth="1" fill="none" />
-                  
+
                   {/* Sprinkle eyes */}
                   <circle cx={start.cx - headUy * 4.5 - headUx * 1} cy={start.cy + headUx * 4.5 - headUy * 1} r={cellSize * 0.035} fill="#701a75" />
                   <circle cx={start.cx + headUy * 4.5 - headUx * 1} cy={start.cy - headUx * 4.5 - headUy * 1} r={cellSize * 0.035} fill="#701a75" />
@@ -702,7 +724,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
               // Tongue vector (pointing forward along the local tangent)
               const tx = -headUx * (cellSize * 0.24);
               const ty = -headUy * (cellSize * 0.24);
-              
+
               beastTongueElement = (
                 <g>
                   <line x1={start.cx} y1={start.cy} x2={start.cx + tx} y2={start.cy + ty} stroke={snake.type === "cobra" ? "#22c55e" : snake.type === "rainbow" ? "#f59e0b" : "#ef4444"} strokeWidth="2.8" strokeLinecap="round" />
@@ -746,7 +768,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                   <circle cx={start.cx - headUy * 5.5 - headUx * 1.5} cy={start.cy + headUx * 5.5 - headUy * 1.5} r={cellSize * 0.08} fill={outerEyeColor} stroke="#1e293b" strokeWidth="1.2" />
                   <circle cx={start.cx - headUy * 4.5 - headUx * 2} cy={start.cy + headUx * 4.5 - headUy * 2} r={cellSize * 0.035} fill={eyeColor} />
                   {snake.type === "viper" && <line x1={start.cx - headUy * 4.5 - headUx * 2} y1={start.cy + headUx * 4.5 - headUy * 2 - 2} x2={start.cx - headUy * 4.5 - headUx * 2} y2={start.cy + headUx * 4.5 - headUy * 2 + 2} stroke="black" strokeWidth="1" />}
-                  
+
                   <circle cx={start.cx + headUy * 5.5 - headUx * 1.5} cy={start.cy - headUx * 5.5 - headUy * 1.5} r={cellSize * 0.08} fill={outerEyeColor} stroke="#1e293b" strokeWidth="1.2" />
                   <circle cx={start.cx + headUy * 4.5 - headUx * 2} cy={start.cy - headUx * 4.5 - headUy * 2} r={cellSize * 0.035} fill={eyeColor} />
                   {snake.type === "viper" && <line x1={start.cx + headUy * 4.5 - headUx * 2} y1={start.cy - headUx * 4.5 - headUy * 2 - 2} x2={start.cx + headUy * 4.5 - headUx * 2} y2={start.cy - headUx * 4.5 - headUy * 2 + 2} stroke="black" strokeWidth="1" />}
@@ -850,7 +872,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                         const angleDeg = (angleRad * 180) / Math.PI;
                         const uX = -Math.sin(angleRad);
                         const uY = Math.cos(angleRad);
-                        
+
                         return (
                           <g>
                             <ellipse cx={neck.x} cy={neck.y} rx={cellSize * 0.44} ry={cellSize * 0.24} fill="#4a044e" stroke="#22c55e" strokeWidth="2.5" transform={`rotate(${angleDeg + 90}, ${neck.x}, ${neck.y})`} />
@@ -860,7 +882,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                           </g>
                         );
                       })()}
-                      
+
                       <path d={pathD} stroke="#4a044e" strokeWidth={bWidth + 3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
                       <path d={pathD} stroke="#701a75" strokeWidth={bWidth} fill="none" strokeLinecap="round" strokeLinejoin="round" />
                       <path d={pathD} stroke="#22c55e" strokeWidth={bWidth * 0.45} strokeDasharray="8 12" fill="none" strokeLinecap="round" strokeLinejoin="round" />
@@ -938,8 +960,8 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                             return (
                               <rect
                                 key={`node-${pIdx}`}
-                                x={p.x - width/2}
-                                y={p.y - width/2}
+                                x={p.x - width / 2}
+                                y={p.y - width / 2}
                                 width={width}
                                 height={width}
                                 fill="#0f172a"
@@ -960,7 +982,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                             return (
                               <path
                                 key={`leaf-sh-${pIdx}`}
-                                d={`M ${p.x + 2} ${p.y + 2 - radius} Q ${p.x + 2 + radius*1.4} ${p.y + 2} ${p.x + 2} ${p.y + 2 + radius} Q ${p.x + 2 - radius*1.4} ${p.y + 2} ${p.x + 2} ${p.y + 2 - radius}`}
+                                d={`M ${p.x + 2} ${p.y + 2 - radius} Q ${p.x + 2 + radius * 1.4} ${p.y + 2} ${p.x + 2} ${p.y + 2 + radius} Q ${p.x + 2 - radius * 1.4} ${p.y + 2} ${p.x + 2} ${p.y + 2 - radius}`}
                                 fill="rgba(0,0,0,0.18)"
                               />
                             );
@@ -973,7 +995,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                             return (
                               <path
                                 key={`leaf-${pIdx}`}
-                                d={`M ${p.x} ${p.y - radius} Q ${p.x + radius*1.4} ${p.y} ${p.x} ${p.y + radius} Q ${p.x - radius*1.4} ${p.y} ${p.x} ${p.y - radius}`}
+                                d={`M ${p.x} ${p.y - radius} Q ${p.x + radius * 1.4} ${p.y} ${p.x} ${p.y + radius} Q ${p.x - radius * 1.4} ${p.y} ${p.x} ${p.y - radius}`}
                                 fill="#15803d"
                                 stroke="#166534"
                                 strokeWidth="0.8"
@@ -1160,16 +1182,16 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                     <g>
                       {/* Magical outer pastel pink glow */}
                       <path d={pathD} stroke="rgba(244, 63, 94, 0.35)" strokeWidth={bWidth + 3.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                      
+
                       {/* Pastel shimmery pink body */}
                       <path d={pathD} stroke="#ec4899" strokeWidth={bWidth} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                      
+
                       {/* Golden shimmery dashed core line */}
                       <path d={pathD} stroke="#f59e0b" strokeWidth={bWidth * 0.62} strokeDasharray="12 16" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                      
+
                       {/* Sky blue dashed shimmer line */}
                       <path d={pathD} stroke="#06b6d4" strokeWidth={bWidth * 0.32} strokeDasharray="6 20" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                      
+
                       {/* White shining sparkle stars along the body */}
                       {points.map((p, pIdx) => {
                         if (pIdx % 6 !== 0 || pIdx < 3 || pIdx > numSteps - 3) return null;
@@ -1234,8 +1256,8 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                         return (
                           <rect
                             key={`node-${pIdx}`}
-                            x={p.x - width/2}
-                            y={p.y - width/2}
+                            x={p.x - width / 2}
+                            y={p.y - width / 2}
                             width={width}
                             height={width}
                             fill="#0f172a"
@@ -1256,7 +1278,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                         return (
                           <path
                             key={`leaf-sh-${pIdx}`}
-                            d={`M ${p.x + 2} ${p.y + 2 - radius} Q ${p.x + 2 + radius*1.4} ${p.y + 2} ${p.x + 2} ${p.y + 2 + radius} Q ${p.x + 2 - radius*1.4} ${p.y + 2} ${p.x + 2} ${p.y + 2 - radius}`}
+                            d={`M ${p.x + 2} ${p.y + 2 - radius} Q ${p.x + 2 + radius * 1.4} ${p.y + 2} ${p.x + 2} ${p.y + 2 + radius} Q ${p.x + 2 - radius * 1.4} ${p.y + 2} ${p.x + 2} ${p.y + 2 - radius}`}
                             fill="rgba(0,0,0,0.18)"
                           />
                         );
@@ -1269,7 +1291,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                         return (
                           <path
                             key={`leaf-${pIdx}`}
-                            d={`M ${p.x} ${p.y - radius} Q ${p.x + radius*1.4} ${p.y} ${p.x} ${p.y + radius} Q ${p.x - radius*1.4} ${p.y} ${p.x} ${p.y - radius}`}
+                            d={`M ${p.x} ${p.y - radius} Q ${p.x + radius * 1.4} ${p.y} ${p.x} ${p.y + radius} Q ${p.x - radius * 1.4} ${p.y} ${p.x} ${p.y - radius}`}
                             fill="#15803d"
                             stroke="#166534"
                             strokeWidth="0.8"
@@ -1515,104 +1537,104 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
                   )}
                 </g>
               ),
-            detailElements: gameMode === "beast-snakes" ? (() => {
-              let startOffset = "50%";
-              if (snake.type === "anaconda") startOffset = "72%";
-              else if (snake.type === "python") startOffset = "32%";
-              else if (snake.type === "cobra") startOffset = "65%";
-              else if (snake.type === "viper") startOffset = "38%";
-              else if (snake.type === "rainbow") startOffset = "28%";
-              else if (snake.type === "standard") startOffset = "48%";
+              detailElements: gameMode === "beast-snakes" ? (() => {
+                let startOffset = "50%";
+                if (snake.type === "anaconda") startOffset = "72%";
+                else if (snake.type === "python") startOffset = "32%";
+                else if (snake.type === "cobra") startOffset = "65%";
+                else if (snake.type === "viper") startOffset = "38%";
+                else if (snake.type === "rainbow") startOffset = "28%";
+                else if (snake.type === "standard") startOffset = "48%";
 
-              return (
+                return (
+                  <g>
+                    {/* Text path definition just for text layout */}
+                    <path id={`snake-path-text-${idx}`} d={textPathD} fill="none" stroke="none" />
+
+                    {/* Slithering uppercase name text overlay with high-contrast outlines */}
+                    <text
+                      dy={cellSize * 0.04}
+                      fill="#ffffff"
+                      stroke="#1e293b"
+                      strokeWidth={cellSize * 0.06}
+                      paintOrder="stroke fill"
+                      fontSize={
+                        cellSize *
+                        (snake.type === "anaconda"
+                          ? 0.22
+                          : snake.type === "python"
+                            ? 0.18
+                            : snake.type === "cobra"
+                              ? 0.15
+                              : snake.type === "viper"
+                                ? 0.14
+                                : snake.type === "rainbow"
+                                  ? 0.15
+                                  : 0.15) + "px"
+                      }
+                      fontWeight="900"
+                      letterSpacing="1.5px"
+                      style={{
+                        fontFamily: "'Outfit', sans-serif",
+                        pointerEvents: "none",
+                        textShadow: "0px 1px 2px rgba(0,0,0,0.85)"
+                      }}
+                    >
+                      <textPath href={`#snake-path-text-${idx}`} xlinkHref={`#snake-path-text-${idx}`} startOffset={startOffset} textAnchor="middle">
+                        {snake.name ? snake.name.replace(/[^A-Za-z ]/g, "").trim().toUpperCase() : "SNAKE"}
+                      </textPath>
+                    </text>
+
+                    {beastTongueElement}
+                    {beastHeadElement}
+                  </g>
+                );
+              })() : (
                 <g>
-                  {/* Text path definition just for text layout */}
-                  <path id={`snake-path-text-${idx}`} d={textPathD} fill="none" stroke="none" />
-                  
-                  {/* Slithering uppercase name text overlay with high-contrast outlines */}
-                  <text
-                    dy={cellSize * 0.04}
-                    fill="#ffffff"
-                    stroke="#1e293b"
-                    strokeWidth={cellSize * 0.06}
-                    paintOrder="stroke fill"
-                    fontSize={
-                      cellSize * 
-                      (snake.type === "anaconda" 
-                        ? 0.22 
-                        : snake.type === "python" 
-                          ? 0.18 
-                          : snake.type === "cobra" 
-                            ? 0.15 
-                            : snake.type === "viper" 
-                              ? 0.14 
-                              : snake.type === "rainbow"
-                                ? 0.15
-                                : 0.15) + "px"
-                    }
-                    fontWeight="900"
-                    letterSpacing="1.5px"
-                    style={{
-                      fontFamily: "'Outfit', sans-serif",
-                      pointerEvents: "none",
-                      textShadow: "0px 1px 2px rgba(0,0,0,0.85)"
-                    }}
-                  >
-                    <textPath href={`#snake-path-text-${idx}`} xlinkHref={`#snake-path-text-${idx}`} startOffset={startOffset} textAnchor="middle">
-                      {snake.name ? snake.name.replace(/[^A-Za-z ]/g, "").trim().toUpperCase() : "SNAKE"}
-                    </textPath>
-                  </text>
-                  
-                  {beastTongueElement}
-                  {beastHeadElement}
+                  {tongueElement}
+                  {headElement}
                 </g>
-              );
-            })() : (
-              <g>
-                {tongueElement}
-                {headElement}
-              </g>
-            ),
-            crownElement: ownerPlayer ? (
-              <text 
-                x={start.cx} 
-                y={start.cy - (cellSize * 0.42)} 
-                fontSize={cellSize * 0.45 + "px"} 
-                textAnchor="middle" 
-                style={{ userSelect: "none", filter: "drop-shadow(0px 2px 4px rgba(0,0,0,0.5))" }}
-              >
-                👑
-              </text>
-            ) : null
-          };
-        });
+              ),
+              crownElement: ownerPlayer ? (
+                <text
+                  x={start.cx}
+                  y={start.cy - (cellSize * 0.42)}
+                  fontSize={cellSize * 0.45 + "px"}
+                  textAnchor="middle"
+                  style={{ userSelect: "none", filter: "drop-shadow(0px 2px 4px rgba(0,0,0,0.5))" }}
+                >
+                  👑
+                </text>
+              ) : null
+            };
+          });
 
-        return (
-          <>
-            {/* 1. Render all bodies in the background layer first */}
-            {snakeRenderData.map((d) => (
-              <g key={`snake-body-${d.idx}`} opacity="0.98">
-                {d.bodyElements}
-              </g>
-            ))}
+          return (
+            <>
+              {/* 1. Render all bodies in the background layer first */}
+              {snakeRenderData.map((d) => (
+                <g key={`snake-body-${d.idx}`} opacity="0.98">
+                  {d.bodyElements}
+                </g>
+              ))}
 
-            {/* 2. Render all details (heads, tongues, slithering names) on top in the foreground layer */}
-            {snakeRenderData.map((d) => (
-              <g key={`snake-details-${d.idx}`} opacity="0.98">
-                {d.detailElements}
-                {d.crownElement}
-              </g>
-            ))}
-          </>
-        );
-      })()}
+              {/* 2. Render all details (heads, tongues, slithering names) on top in the foreground layer */}
+              {snakeRenderData.map((d) => (
+                <g key={`snake-details-${d.idx}`} opacity="0.98">
+                  {d.detailElements}
+                  {d.crownElement}
+                </g>
+              ))}
+            </>
+          );
+        })()}
       </svg>
 
       {/* Draw Cell Numbers (Small top-right align, completely clean) */}
       {cells.map((cell) => {
         const { x, y } = getCoordinates(cell);
         const is100 = cell === 100;
-        
+
         return (
           <div
             key={`cell-num-${cell}`}
@@ -1743,7 +1765,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
         // Offset slightly if multiple players are on the same cell on the active board
         const offsetX = p.position > 0 ? (idx % 2 === 0 ? -1 : 1) * (cellSize * 0.15) : 0;
         const offsetY = p.position > 0 ? (idx < 2 ? -1 : 1) * (cellSize * 0.15) : 0;
-        
+
         // Dynamic transition speed depending on the activity type
         let transitionStyle = "all 0.35s cubic-bezier(0.25, 1, 0.5, 1)"; // Continuous cell walking
         if (p.isClimbing) {
@@ -1791,15 +1813,15 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
               const isFrozen = statusAttempts === 100;
               const isPoisoned = statusAttempts >= 200 && statusAttempts <= 202;
               const isPanicked = statusAttempts >= 300 && statusAttempts <= 302;
-              
+
               if (!isFrozen && !isPoisoned && !isPanicked) return null;
-              
+
               const label = isFrozen ? "❄️" : isPoisoned ? "🧪" : "🌀";
               const bg = isFrozen ? "#38bdf8" : isPoisoned ? "#22c55e" : "#fbbf24";
-              const title = isFrozen 
-                ? "Frozen! Need a 6 to move." 
-                : isPoisoned 
-                  ? `Poisoned! Roll halved (${statusAttempts - 200} turns left).` 
+              const title = isFrozen
+                ? "Frozen! Need a 6 to move."
+                : isPoisoned
+                  ? `Poisoned! Roll halved (${statusAttempts - 200} turns left).`
                   : "Panicked! Walking backwards next turn.";
 
               return (
@@ -1854,7 +1876,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
           </div>
         );
       })}
-      {board?.completedRounds > 0 && (
+      {showShuffleAnim && (
         <div key={`flash-${board.completedRounds}`} className="shuffle-flash-overlay" />
       )}
     </div>
