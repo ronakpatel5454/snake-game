@@ -43,6 +43,12 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
       glow: "rgba(239, 68, 68, 0.3)"
     },
     {
+      id: "tornado",
+      title: "Tornado Mode 🌪️",
+      color: "#6366f1",
+      glow: "rgba(99, 102, 241, 0.3)"
+    },
+    {
       id: "ludo",
       title: "Ludo Rules 👑",
       color: "var(--secondary)",
@@ -241,6 +247,45 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
           </div>
         );
 
+      case "tornado":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ background: "rgba(99, 102, 241, 0.1)", borderLeft: "4px solid #6366f1", padding: "1rem", borderRadius: "8px" }}>
+              <strong style={{ color: "white", fontSize: "1.05rem" }}>The Chaotic Tempest Swapping</strong>
+              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                A swirling vortex strikes periodically! Every N rounds, players have their positions randomly swapped with other active players.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", color: "var(--text-main)", fontSize: "0.95rem" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#a5b4fc" }}>🌪️</span>
+                <div>
+                  <strong>Tornado Strikes:</strong> Once N rounds are completed, a tornado sweeps across the board and shuffles all active players' positions using a Fisher-Yates random shuffle.
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#a5b4fc" }}>🔄</span>
+                <div>
+                  <strong>Position Swap:</strong> You might end up swapped right next to the finish line, or sent back near the start depending on the luck of the tempest!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#a5b4fc" }}>🚪</span>
+                <div>
+                  <strong>Unlocked Players Only:</strong> Only players who have already rolled a 6 and left the starting home (position &gt; 0) are swapped. If your token is still at home, you do not participate in the swap.
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "var(--accent)" }}>⚙️</span>
+                <div>
+                  <strong>Interval & Setup:</strong> Customize the tornado strike interval (1 to 5 rounds) and select custom snake/ladder quantities in the match settings lobby.
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       case "ludo":
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -365,45 +410,9 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
 
         <div style={{ textAlign: "left", paddingRight: "2.5rem" }}>
           <h2 style={{ fontSize: "1.6rem", fontWeight: "800", color: "white", marginBottom: "0.25rem", background: "linear-gradient(to right, white, var(--text-muted))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            Game Rules & Modes
+            {tabs.find(t => t.id === activeTab)?.title ? `${tabs.find(t => t.id === activeTab).title} Rules` : "Game Rules"}
           </h2>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Learn about dynamic game rules, custom features, and inversions.</p>
-        </div>
-
-        {/* Tab Headers */}
-        <div style={{
-          display: "flex",
-          gap: "6px",
-          background: "rgba(255,255,255,0.03)",
-          padding: "4px",
-          borderRadius: "12px",
-          border: "1px solid rgba(255,255,255,0.05)",
-          flexShrink: 0
-        }}>
-          {tabs.map((tab) => {
-            const isSelected = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  flex: 1,
-                  padding: "10px 4px",
-                  borderRadius: "8px",
-                  fontSize: "0.8rem",
-                  fontWeight: isSelected ? "bold" : "500",
-                  cursor: "pointer",
-                  border: "none",
-                  background: isSelected ? tab.color : "transparent",
-                  color: isSelected ? "white" : "var(--text-muted)",
-                  boxShadow: isSelected ? `0 4px 12px ${tab.glow}` : "none",
-                  transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
-                }}
-              >
-                {tab.title}
-              </button>
-            );
-          })}
+          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Learn about the dynamic rules, custom features, and mechanics.</p>
         </div>
 
         {/* Active Tab Content Area (Scrollable body, stays bound cleanly) */}

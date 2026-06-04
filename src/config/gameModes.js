@@ -35,6 +35,13 @@ export const GAME_MODES = [
     badge: "Active"
   },
   {
+    id: "tornado",
+    title: "Tornado Mode 🌪️",
+    description: "Tornadoes strike periodically! All players' positions are randomly swapped among each other. Customize the tornado round interval.",
+    active: true,
+    badge: "Active"
+  },
+  {
     id: "championship",
     title: "Championship Mode 🏆",
     description: "Ranked multiplayer with timed turns, hazard cells, and competitive match lobbies.",

@@ -7,6 +7,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
   const containerRef = useRef(null);
   const [boardSize, setBoardSize] = useState(500);
   const [showShuffleAnim, setShowShuffleAnim] = useState(false);
+  const [showTornadoAnim, setShowTornadoAnim] = useState(false);
   const prevRoundsRef = useRef(board?.completedRounds || 0);
 
   useEffect(() => {
@@ -16,13 +17,21 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
     if (currentRounds !== prevRounds) {
       prevRoundsRef.current = currentRounds;
 
-      const shuffleInterval = board?.shuffleInterval || 1;
-      if (gameMode === "shuffle-snake" && currentRounds > 0 && currentRounds % shuffleInterval === 0) {
-        setShowShuffleAnim(true);
-        const timer = setTimeout(() => {
-          setShowShuffleAnim(false);
-        }, 1200);
-        return () => clearTimeout(timer);
+      const interval = board?.shuffleInterval || 1;
+      if (currentRounds > 0 && currentRounds % interval === 0) {
+        if (gameMode === "shuffle-snake") {
+          setShowShuffleAnim(true);
+          const timer = setTimeout(() => {
+            setShowShuffleAnim(false);
+          }, 1200);
+          return () => clearTimeout(timer);
+        } else if (gameMode === "tornado") {
+          setShowTornadoAnim(true);
+          const timer = setTimeout(() => {
+            setShowTornadoAnim(false);
+          }, 1200);
+          return () => clearTimeout(timer);
+        }
       }
     }
   }, [board?.completedRounds, board?.shuffleInterval, gameMode]);
@@ -198,6 +207,39 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
           0% { opacity: 0; transform: scale(0.85); filter: blur(4px); }
           15% { opacity: 1; transform: scale(1.04); filter: blur(0px); }
           100% { opacity: 0; transform: scale(1.15); filter: blur(15px); }
+        }
+
+        .tornado-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: conic-gradient(from 0deg, rgba(255,255,255,0) 0%, rgba(148,163,184,0.4) 25%, rgba(255,255,255,0) 50%, rgba(148,163,184,0.4) 75%, rgba(255,255,255,0) 100%);
+          mix-blend-mode: screen;
+          pointer-events: none;
+          z-index: 100;
+          opacity: 0;
+          border-radius: 16px;
+          animation: tornado-spin-pulse 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        @keyframes tornado-spin-pulse {
+          0% { opacity: 0; transform: scale(0.3) rotate(0deg); filter: blur(10px); }
+          25% { opacity: 0.85; transform: scale(1.05) rotate(180deg); filter: blur(3px); }
+          75% { opacity: 0.85; transform: scale(0.95) rotate(360deg); filter: blur(3px); }
+          100% { opacity: 0; transform: scale(1.3) rotate(720deg); filter: blur(15px); }
+        }
+
+        .tornado-shake {
+          animation: tornado-shake-anim 1.2s ease-in-out forwards;
+        }
+        @keyframes tornado-shake-anim {
+          0% { transform: rotate(0deg) scale(1); }
+          20% { transform: rotate(15deg) scale(1.15) translate(-2px, -3px); }
+          40% { transform: rotate(-15deg) scale(1.2) translate(3px, 2px); }
+          60% { transform: rotate(20deg) scale(1.15) translate(-3px, 3px); }
+          80% { transform: rotate(-20deg) scale(1.05) translate(2px, -2px); }
+          100% { transform: rotate(0deg) scale(1) translate(0, 0); }
         }
       `}</style>
 
@@ -1774,7 +1816,7 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
           transitionStyle = "all 1.0s cubic-bezier(0.36, 0.07, 0.19, 0.97)"; // Viscous swallow slide down snakes
         }
 
-        // Dynamic keyframe animations for panic, swallow, climb, and walk
+        // Dynamic keyframe animations for panic, swallow, climb, walk, and tornado
         let animationStyle = "none";
         if (p.isPanicking) {
           animationStyle = "cookie-panic-shake 0.15s infinite linear";
@@ -1784,6 +1826,8 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
           animationStyle = "cookie-ladder-climb 0.4s infinite ease-in-out";
         } else if (p.isWalking) {
           animationStyle = "cookie-walk 0.35s infinite ease-in-out";
+        } else if (showTornadoAnim) {
+          animationStyle = "tornado-shake-anim 1.2s ease-in-out forwards";
         }
 
         return (
@@ -1878,6 +1922,9 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
       })}
       {showShuffleAnim && (
         <div key={`flash-${board.completedRounds}`} className="shuffle-flash-overlay" />
+      )}
+      {showTornadoAnim && (
+        <div key={`tornado-${board.completedRounds}`} className="tornado-overlay" />
       )}
     </div>
   );

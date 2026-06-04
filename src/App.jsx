@@ -2104,7 +2104,7 @@ export default function App() {
     setPlayers(initialPlayers);
     const playerSnakeHeads = gameMode === "own-snake" ? setupPlayers.map(p => p.ownSnakeNumber) : [];
     const generated = generateBoard(playerSnakeHeads, numSnakes, numLadders, gameMode);
-    if (gameMode === "shuffle-snake") {
+    if (gameMode === "shuffle-snake" || gameMode === "tornado") {
       generated.shuffleInterval = shuffleInt;
       generated.shuffleLadders = shuffleLads;
       generated.completedRounds = 0;
@@ -2129,7 +2129,7 @@ export default function App() {
 
       const playerSnakeHeads = gameMode === "own-snake" ? joinedPlayers.map(p => p.ownSnakeNumber) : [];
       const generated = generateBoard(playerSnakeHeads, finalSnakes, finalLadders, gameMode);
-      if (gameMode === "shuffle-snake") {
+      if (gameMode === "shuffle-snake" || gameMode === "tornado") {
         generated.shuffleInterval = shuffleInt;
         generated.shuffleLadders = shuffleLads;
         generated.completedRounds = 0;
@@ -2183,7 +2183,7 @@ export default function App() {
 
         const playerSnakeHeads = gameMode === "own-snake" ? players.map(p => p.ownSnakeNumber) : [];
         const generated = generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount, gameMode);
-        if (gameMode === "shuffle-snake") {
+        if (gameMode === "shuffle-snake" || gameMode === "tornado") {
           generated.shuffleInterval = board ? board.shuffleInterval : 1;
           generated.shuffleLadders = board ? board.shuffleLadders : false;
           generated.completedRounds = 0;
@@ -2231,7 +2231,7 @@ export default function App() {
     setPlayers(resetPlayers);
     const playerSnakeHeads = gameMode === "own-snake" ? resetPlayers.map(p => p.ownSnakeNumber) : [];
     const generated = generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount, gameMode);
-    if (gameMode === "shuffle-snake") {
+    if (gameMode === "shuffle-snake" || gameMode === "tornado") {
       generated.shuffleInterval = board ? board.shuffleInterval : 1;
       generated.shuffleLadders = board ? board.shuffleLadders : false;
       generated.completedRounds = 0;
@@ -2852,6 +2852,92 @@ export default function App() {
       nextBoardLocal.completedRounds = newRounds;
       setBoard(nextBoardLocal);
       setPlayers(localPlayersUpdated);
+    } else if (gameMode === "tornado" && isRoundCompleted && board) {
+      const newRounds = (board.completedRounds || 0) + 1;
+      const shouldSwap = (newRounds % (board.shuffleInterval || 1) === 0);
+      nextBoardLocal = { ...board };
+
+      if (shouldSwap) {
+        // Find which players are currently unlocked (position > 0)
+        // For the active player, we check currentPos. For others, we check p.position.
+        const unlockedPlayers = localPlayersUpdated.filter(p => {
+          const pos = (p.id === player.id) ? currentPos : p.position;
+          return pos > 0;
+        });
+
+        if (unlockedPlayers.length > 1) {
+          let shuffledText = "🌪️ Tornado strike! Players have swapped positions!";
+          logMsg = `${shuffledText}\n` + logMsg;
+
+          const unlockedPositions = unlockedPlayers.map(p => {
+            return (p.id === player.id) ? currentPos : p.position;
+          });
+
+          // Fisher-Yates shuffle the positions of the unlocked players
+          for (let i = unlockedPositions.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [unlockedPositions[i], unlockedPositions[j]] = [unlockedPositions[j], unlockedPositions[i]];
+          }
+
+          // Create a mapping of player id -> new swapped position
+          const positionMap = {};
+          unlockedPlayers.forEach((p, idx) => {
+            positionMap[p.id] = unlockedPositions[idx];
+          });
+
+          localPlayersUpdated = localPlayersUpdated.map(p => {
+            const isSwapped = positionMap[p.id] !== undefined;
+            const newPos = isSwapped ? positionMap[p.id] : ((p.id === player.id) ? currentPos : p.position);
+            const isCurrentPlayer = p.id === player.id;
+            
+            return {
+              ...p,
+              position: newPos,
+              unlockAttempts: isCurrentPlayer ? updatedAttempts : p.unlockAttempts,
+              lastRoll: isCurrentPlayer ? roll : p.lastRoll,
+              isWalking: false,
+              isClimbing: false,
+              isSwallowed: false,
+              isPanicking: false
+            };
+          });
+        } else {
+          // If 1 or fewer players are unlocked, no swapping can happen. Just resolve turn.
+          localPlayersUpdated = localPlayersUpdated.map(p => 
+            p.id === player.id 
+              ? { 
+                  ...p, 
+                  position: currentPos, 
+                  unlockAttempts: updatedAttempts, 
+                  lastRoll: roll,
+                  isWalking: false,
+                  isClimbing: false,
+                  isSwallowed: false,
+                  isPanicking: false
+                } 
+              : p
+          );
+        }
+      } else {
+        localPlayersUpdated = localPlayersUpdated.map(p => 
+          p.id === player.id 
+            ? { 
+                ...p, 
+                position: currentPos, 
+                unlockAttempts: updatedAttempts, 
+                lastRoll: roll,
+                isWalking: false,
+                isClimbing: false,
+                isSwallowed: false,
+                isPanicking: false
+              } 
+            : p
+        );
+      }
+      nextBoardLocal.shuffleInterval = board.shuffleInterval;
+      nextBoardLocal.completedRounds = newRounds;
+      setBoard(nextBoardLocal);
+      setPlayers(localPlayersUpdated);
     } else {
       localPlayersUpdated = localPlayersUpdated.map(p => 
         p.id === player.id 
@@ -2870,7 +2956,7 @@ export default function App() {
       setPlayers(localPlayersUpdated);
     }
 
-    if (!isOnline && isRoundCompleted && gameMode === "shuffle-snake") {
+    if (!isOnline && isRoundCompleted && (gameMode === "shuffle-snake" || gameMode === "tornado")) {
       try {
         localStorage.setItem("snake_game_board", JSON.stringify(nextBoardLocal));
       } catch (e) {
@@ -2906,84 +2992,147 @@ export default function App() {
             logs: updatedLogs
           };
 
-          if (isHost && isRoundCompleted && gameMode === "shuffle-snake" && board) {
+          if (isHost && isRoundCompleted && (gameMode === "shuffle-snake" || gameMode === "tornado") && board) {
             const newRounds = (board.completedRounds || 0) + 1;
-            const shouldShuffle = (newRounds % (board.shuffleInterval || 1) === 0);
-            let nextBoardOnline;
+            const shouldAct = (newRounds % (board.shuffleInterval || 1) === 0);
+            let nextBoardOnline = { ...board };
             
-            if (shouldShuffle) {
+            if (shouldAct) {
               hasShuffledAndSyncedCurrentPlayer = true;
-              nextBoardOnline = shuffleBoardElements(board, setupSnakesCount || 3, setupLaddersCount || 5, gameMode, true, board.shuffleLadders);
               
-              let shuffledText = board.shuffleLadders 
-                ? "🌀 Shifting ground! Snakes and Ladders have rotated positions!" 
-                : "🌀 Shifting ground! Snakes have shuffled positions!";
-              updatedLogs = [shuffledText, ...updatedLogs].slice(0, 5);
+              if (gameMode === "shuffle-snake") {
+                nextBoardOnline = shuffleBoardElements(board, setupSnakesCount || 3, setupLaddersCount || 5, gameMode, true, board.shuffleLadders);
+                
+                let shuffledText = board.shuffleLadders 
+                  ? "🌀 Shifting ground! Snakes and Ladders have rotated positions!" 
+                  : "🌀 Shifting ground! Snakes have shuffled positions!";
+                updatedLogs = [shuffledText, ...updatedLogs].slice(0, 5);
 
-              const playerUpdates = playersRef.current.map(async (p) => {
-                let startCheckPos = p.position;
-                if (p.id === player.id) {
-                  startCheckPos = currentPos;
-                }
+                const playerUpdates = playersRef.current.map(async (p) => {
+                  let startCheckPos = p.position;
+                  if (p.id === player.id) {
+                    startCheckPos = currentPos;
+                  }
 
-                if (startCheckPos > 0 && startCheckPos < 100) {
-                  let finalPos = startCheckPos;
-                  let updatedBiteCount = p.snakeBiteCount || 0;
-                  let hasBeenBitten = p.hasBeenBittenBySnake || false;
+                  if (startCheckPos > 0 && startCheckPos < 100) {
+                    let finalPos = startCheckPos;
+                    let updatedBiteCount = p.snakeBiteCount || 0;
+                    let hasBeenBitten = p.hasBeenBittenBySnake || false;
 
-                  // 1. Check newly shuffled snakes
-                  const snake = nextBoardOnline.snakes.find(s => s.head === startCheckPos);
-                  if (snake) {
-                    const isOwnSnake = gameMode !== "classic" && startCheckPos === p.ownSnakeNumber;
-                    /*
-                    const isSecretlyImmune = updatedBiteCount >= 5;
-                    */
-
-                    if (!isOwnSnake) { // Removed: && !isSecretlyImmune
-                      finalPos = snake.tail;
-                      updatedBiteCount += 1;
-                      hasBeenBitten = true;
-                      updatedLogs = [`💥 Shifting ground! ${p.name} was swallowed by a new snake head at ${snake.head} and slid down to ${snake.tail}!`, ...updatedLogs].slice(0, 5);
+                    // Check newly shuffled snakes
+                    const snake = nextBoardOnline.snakes.find(s => s.head === startCheckPos);
+                    if (snake) {
+                      const isOwnSnake = gameMode !== "classic" && startCheckPos === p.ownSnakeNumber;
+                      if (!isOwnSnake) {
+                        finalPos = snake.tail;
+                        updatedBiteCount += 1;
+                        hasBeenBitten = true;
+                        updatedLogs = [`💥 Shifting ground! ${p.name} was swallowed by a new snake head at ${snake.head} and slid down to ${snake.tail}!`, ...updatedLogs].slice(0, 5);
+                      }
                     }
+
+                    // Check newly shuffled ladders
+                    const ladder = nextBoardOnline.ladders.find(l => l.bottom === startCheckPos);
+                    if (ladder) {
+                      finalPos = ladder.top;
+                      updatedLogs = [`🚀 Shifting ground! A new ladder appeared under ${p.name} at ${ladder.bottom} and boosted them to ${ladder.top}!`, ...updatedLogs].slice(0, 5);
+                    }
+
+                    const isCurrentPlayer = p.id === player.id;
+                    const upd = {
+                      position: finalPos,
+                      unlock_attempts: isCurrentPlayer ? updatedAttempts : p.unlockAttempts,
+                      last_roll: isCurrentPlayer ? roll : p.lastRoll
+                    };
+                    return supabase
+                      .from("game_players")
+                      .update(upd)
+                      .eq("game_id", game.id)
+                      .eq("client_player_id", p.id);
+                  } else if (p.id === player.id) {
+                    // Current player was at home (position 0), update their unlock attempts/roll
+                    const upd = {
+                      position: currentPos,
+                      unlock_attempts: updatedAttempts,
+                      last_roll: roll
+                    };
+                    return supabase
+                      .from("game_players")
+                      .update(upd)
+                      .eq("game_id", game.id)
+                      .eq("client_player_id", p.id);
+                  }
+                  return null;
+                }).filter(Boolean);
+                await Promise.all(playerUpdates);
+              } else if (gameMode === "tornado") {
+                const currentPlayers = [...playersRef.current];
+
+                // Find which players are currently unlocked (position > 0)
+                // For the active player, we check currentPos. For others, we check p.position.
+                const unlockedPlayers = currentPlayers.filter(p => {
+                  const pos = (p.id === player.id) ? currentPos : p.position;
+                  return pos > 0;
+                });
+
+                if (unlockedPlayers.length > 1) {
+                  let shuffledText = "🌪️ Tornado strike! Players have swapped positions!";
+                  updatedLogs = [shuffledText, ...updatedLogs].slice(0, 5);
+
+                  const unlockedPositions = unlockedPlayers.map(p => {
+                    return (p.id === player.id) ? currentPos : p.position;
+                  });
+
+                  // Fisher-Yates shuffle the positions of the unlocked players
+                  for (let i = unlockedPositions.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [unlockedPositions[i], unlockedPositions[j]] = [unlockedPositions[j], unlockedPositions[i]];
                   }
 
-                  // 2. Check newly shuffled ladders
-                  const ladder = nextBoardOnline.ladders.find(l => l.bottom === startCheckPos);
-                  if (ladder) {
-                    finalPos = ladder.top;
-                    updatedLogs = [`🚀 Shifting ground! A new ladder appeared under ${p.name} at ${ladder.bottom} and boosted them to ${ladder.top}!`, ...updatedLogs].slice(0, 5);
-                  }
+                  // Create a mapping of player id -> new swapped position
+                  const positionMap = {};
+                  unlockedPlayers.forEach((p, idx) => {
+                    positionMap[p.id] = unlockedPositions[idx];
+                  });
 
-                  const isCurrentPlayer = p.id === player.id;
-                  const upd = {
-                    position: finalPos,
-                    unlock_attempts: isCurrentPlayer ? updatedAttempts : p.unlockAttempts,
-                    last_roll: isCurrentPlayer ? roll : p.lastRoll
-                  };
-                  return supabase
-                    .from("game_players")
-                    .update(upd)
-                    .eq("game_id", game.id)
-                    .eq("client_player_id", p.id);
-                } else if (p.id === player.id) {
-                  // Current player was at home (position 0), update their unlock attempts/roll
-                  const upd = {
-                    position: currentPos,
-                    unlock_attempts: updatedAttempts,
-                    last_roll: roll
-                  };
-                  return supabase
-                    .from("game_players")
-                    .update(upd)
-                    .eq("game_id", game.id)
-                    .eq("client_player_id", p.id);
+                  const playerUpdates = currentPlayers.map(async (p) => {
+                    const isSwapped = positionMap[p.id] !== undefined;
+                    const newPos = isSwapped ? positionMap[p.id] : ((p.id === player.id) ? currentPos : p.position);
+                    const isCurrentPlayer = p.id === player.id;
+                    const upd = {
+                      position: newPos,
+                      unlock_attempts: isCurrentPlayer ? updatedAttempts : p.unlockAttempts,
+                      last_roll: isCurrentPlayer ? roll : p.lastRoll
+                    };
+                    return supabase
+                      .from("game_players")
+                      .update(upd)
+                      .eq("game_id", game.id)
+                      .eq("client_player_id", p.id);
+                  });
+                  await Promise.all(playerUpdates);
+                } else {
+                  // If 1 or fewer players are unlocked, no swapping can happen. Just update active player's turn info.
+                  const playerUpdates = currentPlayers.map(async (p) => {
+                    const isCurrentPlayer = p.id === player.id;
+                    if (isCurrentPlayer) {
+                      const upd = {
+                        position: currentPos,
+                        unlock_attempts: updatedAttempts,
+                        last_roll: roll
+                      };
+                      return supabase
+                        .from("game_players")
+                        .update(upd)
+                        .eq("game_id", game.id)
+                        .eq("client_player_id", p.id);
+                    }
+                    return null;
+                  }).filter(Boolean);
+                  await Promise.all(playerUpdates);
                 }
-                return null;
-              }).filter(Boolean);
-              await Promise.all(playerUpdates);
+              }
 
-            } else {
-              nextBoardOnline = { ...board };
             }
             nextBoardOnline.shuffleInterval = board.shuffleInterval;
             nextBoardOnline.shuffleLadders = board.shuffleLadders;
@@ -3233,39 +3382,51 @@ export default function App() {
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(15, 23, 42, 0.88);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
+          background: rgba(15, 23, 42, 0.9);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
           display: flex;
           align-items: center;
           justify-content: center;
           z-index: 10000;
           opacity: 0;
-          animation: victory-fade-in 0.5s ease-out forwards;
+          animation: victory-fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
           overflow: hidden;
+        }
+
+        .victory-card-container {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          z-index: 10002;
+          animation: victory-card-float 5s ease-in-out infinite alternate;
+        }
+
+        @keyframes victory-card-float {
+          0% { transform: translateY(0); }
+          100% { transform: translateY(-12px); }
         }
         
         .victory-card {
-          background: rgba(30, 41, 59, 0.85);
-          backdrop-filter: blur(10px);
-          border-radius: 24px;
+          background: rgba(15, 23, 42, 0.8);
+          border-radius: 32px;
           padding: 3rem 2.5rem;
-          width: 90%;
-          max-width: 540px;
+          width: 95%;
+          max-width: 520px;
           text-align: center;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-          transform: scale(0.7) translateY(30px);
-          opacity: 0;
-          animation: victory-card-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s forwards;
+          box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
           position: relative;
-          z-index: 10002;
           overflow: hidden;
+          opacity: 0;
+          transform: scale(0.65) translateY(60px);
+          animation: victory-card-pop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.15s forwards;
         }
 
         .victory-crown-container {
           position: relative;
-          width: 120px;
-          height: 120px;
+          width: 130px;
+          height: 130px;
           margin: 0 auto 1.5rem auto;
           display: flex;
           align-items: center;
@@ -3274,36 +3435,74 @@ export default function App() {
 
         .victory-rays {
           position: absolute;
-          width: 160px;
-          height: 160px;
-          opacity: 0.4;
-          animation: victory-ray-spin 12s linear infinite;
+          width: 180px;
+          height: 180px;
+          opacity: 0.35;
+          animation: victory-ray-spin-pulse 10s linear infinite;
           border-radius: 50%;
+          filter: blur(10px);
         }
 
         .victory-crown {
-          font-size: 5rem;
-          filter: drop-shadow(0 0 15px rgba(253, 224, 71, 0.6));
+          font-size: 5.5rem;
+          filter: drop-shadow(0 0 15px rgba(253, 224, 71, 0.7));
           z-index: 2;
-          animation: victory-crown-bounce 3s ease-in-out infinite;
+          animation: victory-crown-bounce 2.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+        }
+
+        .victory-congrats-text {
+          font-size: 1.15rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 4px;
+          margin-bottom: 0.5rem;
+          background: linear-gradient(90deg, #ff007f, #7f00ff, #00f0ff, #7f00ff, #ff007f);
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: victory-congrats-flow 4s linear infinite;
+        }
+
+        @keyframes victory-congrats-flow {
+          0% { background-position: 0% center; }
+          100% { background-position: 200% center; }
         }
 
         .victory-title {
-          font-size: 2.6rem;
-          font-weight: 800;
-          margin: 1rem 0;
+          font-size: 3rem;
+          font-weight: 900;
+          margin: 0.5rem 0 1rem 0;
           background: linear-gradient(135deg, #ffffff 30%, #cbd5e1 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           line-height: 1.2;
+          animation: victory-title-pulse 2s ease-in-out infinite alternate;
         }
 
         .victory-subtitle {
           color: var(--text-muted);
-          font-size: 1rem;
+          font-size: 0.95rem;
           line-height: 1.6;
-          margin-bottom: 2rem;
+          margin-bottom: 2.25rem;
           padding: 0 1rem;
+        }
+
+        .victory-card .btn {
+          position: relative;
+          overflow: hidden;
+          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .victory-card .btn:hover {
+          transform: translateY(-3px) scale(1.02);
+          box-shadow: 0 12px 30px var(--winner-color-glow);
+        }
+        .victory-card .btn:active {
+          transform: translateY(-1px) scale(0.98);
+        }
+        .victory-card .btn-outline:hover {
+          background: rgba(255, 255, 255, 0.08) !important;
+          border-color: rgba(255, 255, 255, 0.4) !important;
+          box-shadow: 0 8px 25px rgba(255,255,255,0.1);
         }
 
         /* Pure CSS Confetti Shower */
@@ -3328,19 +3527,25 @@ export default function App() {
 
         @keyframes victory-card-pop {
           to {
-            transform: scale(1) translateY(0);
+            transform: scale(1) translateY(0) rotate(0deg);
             opacity: 1;
           }
         }
 
-        @keyframes victory-ray-spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
+        @keyframes victory-ray-spin-pulse {
+          0% { transform: rotate(0deg) scale(0.9); opacity: 0.25; }
+          50% { transform: rotate(180deg) scale(1.15); opacity: 0.45; }
+          100% { transform: rotate(360deg) scale(0.9); opacity: 0.25; }
         }
 
         @keyframes victory-crown-bounce {
-          0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
-          50% { transform: translateY(-12px) scale(1.08) rotate(5deg); }
+          0%, 100% { transform: translateY(0) rotate(-4deg) scale(0.96); filter: drop-shadow(0 0 15px rgba(253, 224, 71, 0.6)); }
+          50% { transform: translateY(-18px) rotate(4deg) scale(1.06); filter: drop-shadow(0 0 30px rgba(253, 224, 71, 0.95)); }
+        }
+
+        @keyframes victory-title-pulse {
+          0% { transform: scale(0.98); }
+          100% { transform: scale(1.02); text-shadow: 0 0 20px rgba(255,255,255,0.4), 0 0 35px var(--winner-color-glow); }
         }
 
         @keyframes confetti-fall {
@@ -3352,6 +3557,90 @@ export default function App() {
           0% { margin-left: -20px; }
           100% { margin-left: 20px; }
         }
+
+        /* Snake & Ladder Theme Victory Animations */
+        .victory-crown-container.sl-theme {
+          width: 150px;
+          height: 150px;
+          margin-bottom: 2rem;
+          position: relative;
+        }
+
+        .victory-ladder {
+          animation: ladder-shine 3s ease-in-out infinite;
+        }
+        @keyframes ladder-shine {
+          0%, 100% { opacity: 0.85; filter: drop-shadow(0 0 1px rgba(251,191,36,0.3)); }
+          50% { opacity: 1; filter: drop-shadow(0 0 6px rgba(251,191,36,0.8)); }
+        }
+
+        .victory-snake-body {
+          stroke-dasharray: 200;
+          stroke-dashoffset: 0;
+          animation: snake-wiggle 4s linear infinite;
+        }
+        @keyframes snake-wiggle {
+          0% { stroke-dashoffset: 0; }
+          100% { stroke-dashoffset: -400; }
+        }
+
+        .victory-snake-head {
+          animation: snake-head-bob 2s ease-in-out infinite alternate;
+          transform-origin: 68px 35px;
+        }
+        @keyframes snake-head-bob {
+          0% { transform: translateY(0) rotate(-3deg); }
+          100% { transform: translateY(-2px) rotate(3deg); }
+        }
+
+        .snake-tongue-flicker {
+          animation: tongue-flicker 0.4s ease-in-out infinite alternate;
+          transform-origin: 72.5px 35px;
+        }
+        @keyframes tongue-flicker {
+          0% { transform: scaleX(0.7) rotate(-5deg); }
+          100% { transform: scaleX(1.3) rotate(5deg); }
+        }
+
+        /* Position the crown right on top of the ladder in the themed container */
+        .sl-crown {
+          position: absolute;
+          top: -15px; /* Offset to sit right at the top rung */
+          z-index: 5;
+          animation: sl-crown-float 2.5s ease-in-out infinite;
+        }
+        @keyframes sl-crown-float {
+          0%, 100% { transform: translateY(0) rotate(-4deg) scale(0.96); filter: drop-shadow(0 0 15px rgba(253, 224, 71, 0.6)); }
+          50% { transform: translateY(-8px) rotate(4deg) scale(1.06); filter: drop-shadow(0 0 28px rgba(253, 224, 71, 0.95)); }
+        }
+
+        /* Ludo Victory Orbit Animations */
+        .victory-crown-container.ludo-theme {
+          width: 150px;
+          height: 150px;
+          margin-bottom: 2rem;
+          position: relative;
+        }
+
+        .ludo-crown {
+          position: absolute;
+          z-index: 5;
+          animation: ludo-crown-float 2.5s ease-in-out infinite;
+        }
+        @keyframes ludo-crown-float {
+          0%, 100% { transform: translateY(0) scale(0.98); }
+          50% { transform: translateY(-10px) scale(1.04); }
+        }
+
+        .orbit-token-1 { animation: token-float-1 3s ease-in-out infinite alternate; }
+        .orbit-token-2 { animation: token-float-2 3.5s ease-in-out infinite alternate; }
+        .orbit-token-3 { animation: token-float-3 3.2s ease-in-out infinite alternate; }
+        .orbit-token-4 { animation: token-float-4 3.7s ease-in-out infinite alternate; }
+
+        @keyframes token-float-1 { 0% { transform: translate(0, 0); } 100% { transform: translate(3px, -5px); } }
+        @keyframes token-float-2 { 0% { transform: translate(0, 0); } 100% { transform: translate(-4px, -4px); } }
+        @keyframes token-float-3 { 0% { transform: translate(0, 0); } 100% { transform: translate(-3px, 4px); } }
+        @keyframes token-float-4 { 0% { transform: translate(0, 0); } 100% { transform: translate(4px, 3px); } }
       `}</style>
 
       <button
@@ -3481,6 +3770,7 @@ export default function App() {
                   {gameMode === "negative-snake" && "Negative Snake Mode 🐍"}
                   {gameMode === "beast-snakes" && "Beast-Snakes Mode 🦖"}
                   {gameMode === "shuffle-snake" && "Shuffle Snake Mode 🌀"}
+                  {gameMode === "tornado" && "Tornado Mode 🌪️"}
                 </span>
                 {board && (
                   <span style={{
@@ -3508,6 +3798,20 @@ export default function App() {
                     letterSpacing: "0.5px"
                   }}>
                     🌀 Next Shuffle: Round {Math.ceil(((board.completedRounds || 0) + 1) / (board.shuffleInterval || 1)) * (board.shuffleInterval || 1)}
+                  </span>
+                )}
+                {board && gameMode === "tornado" && (
+                  <span style={{
+                    fontSize: "0.8rem",
+                    fontWeight: "bold",
+                    background: "rgba(99, 102, 241, 0.15)",
+                    border: "1px solid rgba(99, 102, 241, 0.4)",
+                    padding: "4px 12px",
+                    borderRadius: "16px",
+                    color: "#a5b4fc",
+                    letterSpacing: "0.5px"
+                  }}>
+                    🌪️ Next Swap: Round {Math.ceil(((board.completedRounds || 0) + 1) / (board.shuffleInterval || 1)) * (board.shuffleInterval || 1)}
                   </span>
                 )}
                 <button
@@ -3946,43 +4250,83 @@ export default function App() {
       {activeGame === "snake-ladder" && winner && (
         <div className="victory-overlay">
           {generateConfettiParticles()}
-          <div 
-            className="victory-card" 
-            style={{ 
-              border: `2.5px solid ${winner.color}`, 
-              boxShadow: `0 0 45px ${winner.color}55, inset 0 0 20px rgba(255,255,255,0.05)` 
-            }}
-          >
-            <div className="victory-crown-container">
-              <div className="victory-rays" style={{ background: `radial-gradient(circle, ${winner.color} 0%, transparent 70%)` }} />
-              <div className="victory-crown">👑</div>
-            </div>
-            <div style={{ color: winner.color, fontSize: "1.1rem", fontWeight: "600", textTransform: "uppercase", letterSpacing: "3px" }}>
-              🎉 Congratulations! 🎉
-            </div>
-            <h2 className="victory-title">
-              {winner.name} Wins!
-            </h2>
-            <p className="victory-subtitle">
-              A spectacular victory! Reached cell 100 with incredible strategy, lucky rolls, and board mastery. 🏆
-            </p>
-            <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
-              {(!isOnline || isHost) ? (
-                <button className="btn" style={{ flex: 1, padding: "14px 28px" }} onClick={restartSameGame}>
-                  Play Again 🔄
+          <div className="victory-card-container">
+            <div 
+              className="victory-card" 
+              style={{ 
+                border: `2.5px solid ${winner.color}`, 
+                boxShadow: `0 0 45px ${winner.color}55, inset 0 0 20px rgba(255,255,255,0.05)`,
+                "--winner-color": winner.color,
+                "--winner-color-glow": `${winner.color}44`
+              }}
+            >
+              <div className="victory-crown-container sl-theme">
+                <div className="victory-rays" style={{ background: `radial-gradient(circle, ${winner.color} 0%, transparent 70%)` }} />
+                <svg width="140" height="140" viewBox="0 0 100 100" style={{ position: "absolute", zIndex: 1 }}>
+                  <defs>
+                    <linearGradient id="ladder-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#fbbf24" />
+                      <stop offset="100%" stopColor="#d97706" />
+                    </linearGradient>
+                    <linearGradient id="snake-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#10b981" />
+                      <stop offset="100%" stopColor="#047857" />
+                    </linearGradient>
+                  </defs>
+                  <g className="victory-ladder" stroke="url(#ladder-grad)" strokeWidth="3.5" strokeLinecap="round">
+                    <line x1="38" y1="95" x2="38" y2="25" />
+                    <line x1="62" y1="95" x2="62" y2="25" />
+                    <line x1="38" y1="80" x2="62" y2="80" strokeWidth="2.5" />
+                    <line x1="38" y1="62" x2="62" y2="62" strokeWidth="2.5" />
+                    <line x1="38" y1="44" x2="62" y2="44" strokeWidth="2.5" />
+                    <line x1="38" y1="26" x2="62" y2="26" strokeWidth="2.5" />
+                  </g>
+                  <path 
+                    className="victory-snake-body"
+                    d="M 32,95 C 45,95 40,75 55,75 C 70,75 58,55 45,55 C 32,55 42,35 68,35" 
+                    fill="none" 
+                    stroke="url(#snake-grad)" 
+                    strokeWidth="5" 
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    filter="drop-shadow(0 0 4px rgba(16,185,129,0.5))"
+                  />
+                  <g className="victory-snake-head">
+                    <circle cx="68" cy="35" r="4.5" fill="#10b981" />
+                    <circle cx="69.5" cy="34" r="1" fill="#ffffff" />
+                    <circle cx="69.5" cy="34" r="0.5" fill="#000000" />
+                    <path d="M 72.5,35 L 77,34 M 72.5,35 L 76.5,37" stroke="#ef4444" strokeWidth="1" fill="none" className="snake-tongue-flicker" />
+                  </g>
+                </svg>
+                <div className="victory-crown sl-crown">👑</div>
+              </div>
+              <div className="victory-congrats-text">
+                🎉 Congratulations! 🎉
+              </div>
+              <h2 className="victory-title">
+                {winner.name} Wins!
+              </h2>
+              <p className="victory-subtitle">
+                A spectacular victory! Reached cell 100 with incredible strategy, lucky rolls, and board mastery. 🏆
+              </p>
+              <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
+                {(!isOnline || isHost) ? (
+                  <button className="btn" style={{ flex: 1, padding: "14px 28px" }} onClick={restartSameGame}>
+                    Play Again 🔄
+                  </button>
+                ) : (
+                  <button className="btn" style={{ flex: 1, padding: "14px 28px", opacity: 0.6, cursor: "not-allowed" }} disabled>
+                    Waiting for Host... ⏳
+                  </button>
+                )}
+                <button 
+                  className="btn btn-outline" 
+                  style={{ flex: 1, padding: "14px 28px", borderColor: "rgba(255,255,255,0.2)", color: "white" }} 
+                  onClick={exitGame}
+                >
+                  Main Menu 🚪
                 </button>
-              ) : (
-                <button className="btn" style={{ flex: 1, padding: "14px 28px", opacity: 0.6, cursor: "not-allowed" }} disabled>
-                  Waiting for Host... ⏳
-                </button>
-              )}
-              <button 
-                className="btn btn-outline" 
-                style={{ flex: 1, padding: "14px 28px", borderColor: "rgba(255,255,255,0.2)", color: "white" }} 
-                onClick={exitGame}
-              >
-                Main Menu 🚪
-              </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3992,37 +4336,49 @@ export default function App() {
       {activeGame === "ludo" && ludoWinner && (
         <div className="victory-overlay">
           {generateConfettiParticles()}
-          <div 
-            className="victory-card" 
-            style={{ 
-              border: `2.5px solid ${ludoWinner.colorCode}`, 
-              boxShadow: `0 0 45px ${ludoWinner.colorCode}55, inset 0 0 20px rgba(255,255,255,0.05)` 
-            }}
-          >
-            <div className="victory-crown-container">
-              <div className="victory-rays" style={{ background: `radial-gradient(circle, ${ludoWinner.colorCode} 0%, transparent 70%)` }} />
-              <div className="victory-crown">👑</div>
-            </div>
-            <div style={{ color: ludoWinner.colorCode, fontSize: "1.1rem", fontWeight: "600", textTransform: "uppercase", letterSpacing: "3px" }}>
-              🎉 Congratulations! 🎉
-            </div>
-            <h2 className="victory-title">
-              {ludoWinner.name} Wins!
-            </h2>
-            <p className="victory-subtitle">
-              A spectacular victory! Guiding their circular 3D tokens home with tactical precision and absolute board domination. 🏆
-            </p>
-            <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
-              <button className="btn" style={{ flex: 1, padding: "14px 28px" }} onClick={restartLudoGame}>
-                Play Again 🔄
-              </button>
-              <button 
-                className="btn btn-outline" 
-                style={{ flex: 1, padding: "14px 28px", borderColor: "rgba(255,255,255,0.2)", color: "white" }} 
-                onClick={exitGame}
-              >
-                Main Menu 🚪
-              </button>
+          <div className="victory-card-container">
+            <div 
+              className="victory-card" 
+              style={{ 
+                border: `2.5px solid ${ludoWinner.colorCode}`, 
+                boxShadow: `0 0 45px ${ludoWinner.colorCode}55, inset 0 0 20px rgba(255,255,255,0.05)`,
+                "--winner-color": ludoWinner.colorCode,
+                "--winner-color-glow": `${ludoWinner.colorCode}44`
+              }}
+            >
+              <div className="victory-crown-container ludo-theme">
+                <div className="victory-rays" style={{ background: `radial-gradient(circle, ${ludoWinner.colorCode} 0%, transparent 70%)` }} />
+                <svg width="140" height="140" viewBox="0 0 100 100" style={{ position: "absolute", zIndex: 1 }}>
+                  <g className="victory-ludo-tokens">
+                    <circle cx="25" cy="30" r="6" fill="#ef4444" style={{ filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.4))" }} className="orbit-token-1" />
+                    <circle cx="75" cy="30" r="6" fill="#10b981" style={{ filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.4))" }} className="orbit-token-2" />
+                    <circle cx="70" cy="75" r="6" fill="#eab308" style={{ filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.4))" }} className="orbit-token-3" />
+                    <circle cx="28" cy="70" r="6" fill="#3b82f6" style={{ filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.4))" }} className="orbit-token-4" />
+                  </g>
+                </svg>
+                <div className="victory-crown ludo-crown">👑</div>
+              </div>
+              <div className="victory-congrats-text">
+                🎉 Congratulations! 🎉
+              </div>
+              <h2 className="victory-title">
+                {ludoWinner.name} Wins!
+              </h2>
+              <p className="victory-subtitle">
+                A spectacular victory! Guiding their circular 3D tokens home with tactical precision and absolute board domination. 🏆
+              </p>
+              <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
+                <button className="btn" style={{ flex: 1, padding: "14px 28px" }} onClick={restartLudoGame}>
+                  Play Again 🔄
+                </button>
+                <button 
+                  className="btn btn-outline" 
+                  style={{ flex: 1, padding: "14px 28px", borderColor: "rgba(255,255,255,0.2)", color: "white" }} 
+                  onClick={exitGame}
+                >
+                  Main Menu 🚪
+                </button>
+              </div>
             </div>
           </div>
         </div>

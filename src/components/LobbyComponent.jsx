@@ -60,7 +60,7 @@ export default function LobbyComponent({
   const shuffleIntervalError = isNaN(shuffleIntervalParsed) || shuffleInterval.toString().trim() === ""
     ? "Please enter a valid number."
     : shuffleIntervalParsed < 1 || shuffleIntervalParsed > 5
-      ? "Shuffle interval must be between 1 and 5."
+      ? `${gameMode === "tornado" ? "Tornado" : "Shuffle"} interval must be between 1 and 5.`
       : null;
 
   // --- Online Mode States ---
@@ -454,11 +454,11 @@ export default function LobbyComponent({
                   </div>
                 )}
 
-                {gameMode === "shuffle-snake" && (
+                {(gameMode === "shuffle-snake" || gameMode === "tornado") && (
                   <>
                     <div style={{ marginBottom: "1.5rem" }}>
                       <label style={{ display: "block", marginBottom: "0.5rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
-                        🌀 Shuffle Interval (1 - 5 Rounds)
+                        {gameMode === "tornado" ? "🌪️ Tornado Interval (1 - 5 Rounds)" : "🌀 Shuffle Interval (1 - 5 Rounds)"}
                       </label>
                       <input 
                         type="number" 
@@ -476,28 +476,30 @@ export default function LobbyComponent({
                         </div>
                       )}
                     </div>
-                    <div style={{ 
-                      display: "flex", 
-                      alignItems: "center", 
-                      gap: "10px", 
-                      marginBottom: "1.5rem", 
-                      background: "rgba(255,255,255,0.04)", 
-                      padding: "0.75rem 1rem", 
-                      borderRadius: "12px", 
-                      border: "1.5px solid rgba(255,255,255,0.06)",
-                      userSelect: "none"
-                    }}>
-                      <input 
-                        type="checkbox" 
-                        id="shuffle-ladders-online-toggle"
-                        checked={shuffleLadders}
-                        onChange={(e) => setShuffleLadders(e.target.checked)}
-                        style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "var(--p1-color)" }}
-                      />
-                      <label htmlFor="shuffle-ladders-online-toggle" style={{ fontSize: "0.85rem", fontWeight: "bold", color: "white", cursor: "pointer", flex: 1 }}>
-                        🔄 Also shuffle ladders?
-                      </label>
-                    </div>
+                    {gameMode === "shuffle-snake" && (
+                      <div style={{ 
+                        display: "flex", 
+                        alignItems: "center", 
+                        gap: "10px", 
+                        marginBottom: "1.5rem", 
+                        background: "rgba(255,255,255,0.04)", 
+                        padding: "0.75rem 1rem", 
+                        borderRadius: "12px", 
+                        border: "1.5px solid rgba(255,255,255,0.06)",
+                        userSelect: "none"
+                      }}>
+                        <input 
+                          type="checkbox" 
+                          id="shuffle-ladders-online-toggle"
+                          checked={shuffleLadders}
+                          onChange={(e) => setShuffleLadders(e.target.checked)}
+                          style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "var(--p1-color)" }}
+                        />
+                        <label htmlFor="shuffle-ladders-online-toggle" style={{ fontSize: "0.85rem", fontWeight: "bold", color: "white", cursor: "pointer", flex: 1 }}>
+                          🔄 Also shuffle ladders?
+                        </label>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -847,11 +849,11 @@ export default function LobbyComponent({
             </div>
           )}
 
-          {gameMode === "shuffle-snake" && (
+          {(gameMode === "shuffle-snake" || gameMode === "tornado") && (
             <>
               <div style={{ marginBottom: "1.5rem" }}>
                 <label style={{ display: "block", marginBottom: "0.5rem", color: "var(--text-muted)", fontSize: "0.95rem" }}>
-                  🌀 Shuffle Interval (1 - 5 Rounds)
+                  {gameMode === "tornado" ? "🌪️ Tornado Interval (1 - 5 Rounds)" : "🌀 Shuffle Interval (1 - 5 Rounds)"}
                 </label>
                 <input 
                   type="number" 
@@ -869,28 +871,30 @@ export default function LobbyComponent({
                   </div>
                 )}
               </div>
-              <div style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                gap: "10px", 
-                marginBottom: "1.5rem", 
-                background: "rgba(255,255,255,0.04)", 
-                padding: "0.75rem 1rem", 
-                borderRadius: "12px", 
-                border: "1.5px solid rgba(255,255,255,0.06)",
-                userSelect: "none"
-              }}>
-                <input 
-                  type="checkbox" 
-                  id="shuffle-ladders-toggle"
-                  checked={shuffleLadders}
-                  onChange={(e) => setShuffleLadders(e.target.checked)}
-                  style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "var(--p1-color)" }}
-                />
-                <label htmlFor="shuffle-ladders-toggle" style={{ fontSize: "0.9rem", fontWeight: "bold", color: "white", cursor: "pointer", flex: 1 }}>
-                  🔄 Also shuffle ladders?
-                </label>
-              </div>
+              {gameMode === "shuffle-snake" && (
+                <div style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "10px", 
+                  marginBottom: "1.5rem", 
+                  background: "rgba(255,255,255,0.04)", 
+                  padding: "0.75rem 1rem", 
+                  borderRadius: "12px", 
+                  border: "1.5px solid rgba(255,255,255,0.06)",
+                  userSelect: "none"
+                }}>
+                  <input 
+                    type="checkbox" 
+                    id="shuffle-ladders-toggle"
+                    checked={shuffleLadders}
+                    onChange={(e) => setShuffleLadders(e.target.checked)}
+                    style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "var(--p1-color)" }}
+                  />
+                  <label htmlFor="shuffle-ladders-toggle" style={{ fontSize: "0.9rem", fontWeight: "bold", color: "white", cursor: "pointer", flex: 1 }}>
+                    🔄 Also shuffle ladders?
+                  </label>
+                </div>
+              )}
             </>
           )}
 
