@@ -1,4 +1,4 @@
-export function generateBoard(playerSnakeHeads = [], numSnakes = 3, numLadders = 5, gameMode = "own-snake") {
+export function generateBoard(playerSnakeHeads = [], numSnakes = 3, numLadders = 5, gameMode = "own-snake", numCrowns = 1, numBlackHoles = 4) {
   const snakes = [];
   const ladders = [];
   const usedCells = new Set([1, 100]); // 1 and 100 cannot be start/end points
@@ -136,7 +136,41 @@ export function generateBoard(playerSnakeHeads = [], numSnakes = 3, numLadders =
     }
   }
 
-  return { snakes, ladders };
+  // 4. Generate crowns (only in kings-crown mode)
+  const crowns = [];
+  if (gameMode === "kings-crown") {
+    for (let i = 0; i < numCrowns; i++) {
+      let attempts = 0;
+      while (attempts < 100) {
+        const cell = getRandomCell(2, 99);
+        if (!usedCells.has(cell)) {
+          usedCells.add(cell);
+          crowns.push(cell);
+          break;
+        }
+        attempts++;
+      }
+    }
+  }
+
+  // 5. Generate black holes (only in black-hole mode)
+  const blackHoles = [];
+  if (gameMode === "black-hole") {
+    for (let i = 0; i < numBlackHoles; i++) {
+      let attempts = 0;
+      while (attempts < 100) {
+        const cell = getRandomCell(2, 99);
+        if (!usedCells.has(cell)) {
+          usedCells.add(cell);
+          blackHoles.push(cell);
+          break;
+        }
+        attempts++;
+      }
+    }
+  }
+
+  return { snakes, ladders, crowns, blackHoles };
 }
 
 export function rollDice() {
@@ -152,6 +186,14 @@ export function calculateNewPosition(currentPos, diceValue, board, player, gameM
   // Retrieve player status from player.unlockAttempts
   const unlockAttempts = player ? (player.unlockAttempts || 0) : 0;
   let updatedAttempts = unlockAttempts;
+
+  // Check if player is a King (holding crown)
+  let isKing = false;
+  let hasVictoryBonus = false;
+  if (gameMode === "kings-crown" && board && board.crownOwners && player) {
+    isKing = !!board.crownOwners[player.id];
+    hasVictoryBonus = isKing && currentPos >= 90;
+  }
 
   // 1. Process Status Effects if gameMode is beast-snakes and player is out of home (position > 0)
   if (gameMode === "beast-snakes" && currentPos > 0) {
@@ -169,7 +211,7 @@ export function calculateNewPosition(currentPos, diceValue, board, player, gameM
         updatedAttempts = 100;
         grantsAnotherTurn = false;
       }
-      return { position: newPos, message, wasSafeSnake, grantsAnotherTurn, updatedAttempts };
+      return { position: newPos, message, wasSafeSnake, grantsAnotherTurn, updatedAttempts, walkDist: diceValue };
     }
 
     if (unlockAttempts >= 200 && unlockAttempts <= 202) {
@@ -180,6 +222,7 @@ export function calculateNewPosition(currentPos, diceValue, board, player, gameM
       message = `Poisoned! Roll halved from ${diceValue} to ${halvedRoll}.`;
       updatedAttempts = remainingTurns > 1 ? 200 + (remainingTurns - 1) : 0; // Decrement or clear
       grantsAnotherTurn = false; // Halved rolls don't grant extra turn even if rolled 6
+      return { position: newPos, message, wasSafeSnake, grantsAnotherTurn, updatedAttempts, walkDist: halvedRoll };
     } else if (unlockAttempts >= 300 && unlockAttempts <= 302) {
       // Panicked Status Effect (Walk backwards)
       newPos = currentPos - diceValue;
@@ -187,6 +230,7 @@ export function calculateNewPosition(currentPos, diceValue, board, player, gameM
       message = `Panicked! Walked backwards ${diceValue} steps to ${newPos}.`;
       updatedAttempts = 0; // Clear status
       grantsAnotherTurn = false;
+      return { position: newPos, message, wasSafeSnake, grantsAnotherTurn, updatedAttempts, walkDist: diceValue };
     } else {
       // Normal movement
       newPos = currentPos + diceValue;
@@ -205,20 +249,30 @@ export function calculateNewPosition(currentPos, diceValue, board, player, gameM
         message += " Need a 6 to unlock from home.";
         updatedAttempts = unlockAttempts + 1;
       }
-      return { position: newPos, message, wasSafeSnake, grantsAnotherTurn, updatedAttempts };
+      return { position: newPos, message, wasSafeSnake, grantsAnotherTurn, updatedAttempts, walkDist: diceValue };
     }
 
     // Normal movement (standard)
-    newPos = currentPos + diceValue;
+    let effectiveRoll = diceValue;
+    if (isKing) {
+      const bonus = hasVictoryBonus ? 4 : 2;
+      effectiveRoll = diceValue + bonus;
+      message += ` (Royal Bonus: +${bonus} steps!)`;
+    }
+    newPos = currentPos + effectiveRoll;
     if (diceValue === 6) grantsAnotherTurn = true;
   }
 
   // Handle exceeding 100
+  let effectiveRoll = diceValue;
+  if (isKing) {
+    effectiveRoll = diceValue + (hasVictoryBonus ? 4 : 2);
+  }
   if (newPos > 100) {
     newPos = currentPos;
     message += " Need exact roll to reach 100. Cannot move.";
     grantsAnotherTurn = false;
-    return { position: newPos, message, wasSafeSnake, grantsAnotherTurn, updatedAttempts };
+    return { position: newPos, message, wasSafeSnake, grantsAnotherTurn, updatedAttempts, walkDist: effectiveRoll };
   }
 
   if (gameMode === "negative-snake") {
@@ -260,7 +314,9 @@ export function calculateNewPosition(currentPos, diceValue, board, player, gameM
           // Secretly immune! Treat as a normal land on the tile, so no slide occurs.
         } else {
         */
-          if (gameMode === "beast-snakes") {
+          if (gameMode === "kings-crown" && isKing && currentPos >= 90) {
+            message += ` Landed on a snake at ${snake.head}, but your Crown's Victory Bonus makes you immune!`;
+          } else if (gameMode === "beast-snakes") {
             newPos = snake.tail;
             // Apply custom status effects based on snake type
             if (snake.type === "anaconda") {
@@ -296,13 +352,30 @@ export function calculateNewPosition(currentPos, diceValue, board, player, gameM
     }
   }
 
+  // Check black holes (only in black-hole mode)
+  if (gameMode === "black-hole" && board.blackHoles && board.blackHoles.includes(newPos)) {
+    const otherHoles = board.blackHoles.filter(h => h !== newPos);
+    const isRare = Math.random() < 0.10;
+    let destination = newPos;
+    if (isRare) {
+      destination = Math.floor(Math.random() * (99 - 95 + 1)) + 95;
+      message += ` Absorbed by a Black Hole! Rare Event: Space-time collapse warped you near the finish line at cell ${destination}!`;
+    } else if (otherHoles.length > 0) {
+      destination = otherHoles[Math.floor(Math.random() * otherHoles.length)];
+      message += ` Absorbed by a Black Hole! Teleported to another black hole at cell ${destination}!`;
+    } else {
+      message += ` Absorbed by a Black Hole, but there are no other black holes to teleport to!`;
+    }
+    newPos = destination;
+  }
+
   // Adjust grantsAnotherTurn if they hit a snake/ladder or just rolled 6
   if (diceValue === 6 && newPos !== currentPos && gameMode !== "beast-snakes") {
     grantsAnotherTurn = true;
     message += " Rolled a 6, so you get another turn!";
   }
 
-  return { position: newPos, message, wasSafeSnake, grantsAnotherTurn, updatedAttempts };
+  return { position: newPos, message, wasSafeSnake, grantsAnotherTurn, updatedAttempts, walkDist: effectiveRoll };
 }
 
 export function shuffleBoardElements(currentBoard, numSnakes = 3, numLadders = 5, gameMode = "shuffle-snake", shuffleSnakes = true, shuffleLadders = false) {

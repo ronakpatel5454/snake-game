@@ -49,6 +49,18 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
       glow: "rgba(99, 102, 241, 0.3)"
     },
     {
+      id: "kings-crown",
+      title: "King's Crown Mode 👑",
+      color: "#eab308",
+      glow: "rgba(234, 179, 8, 0.3)"
+    },
+    {
+      id: "black-hole",
+      title: "Black Hole Mode 🕳️",
+      color: "#a855f7",
+      glow: "rgba(168, 85, 247, 0.3)"
+    },
+    {
       id: "ludo",
       title: "Ludo Rules 👑",
       color: "var(--secondary)",
@@ -280,6 +292,78 @@ export default function RulesModal({ isOpen, onClose, defaultMode = "classic" })
                 <span style={{ fontSize: "1.2rem", color: "var(--accent)" }}>⚙️</span>
                 <div>
                   <strong>Interval & Setup:</strong> Customize the tornado strike interval (1 to 5 rounds) and select custom snake/ladder quantities in the match settings lobby.
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "kings-crown":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ background: "rgba(234, 179, 8, 0.1)", borderLeft: "4px solid #eab308", padding: "1rem", borderRadius: "8px" }}>
+              <strong style={{ color: "white", fontSize: "1.05rem" }}>Hold the Throne 👑</strong>
+              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                Claim the crown spawning on the board to gain royal speeds, defend your title from challengers, and unlock immense victory bonuses near the end!
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", color: "var(--text-main)", fontSize: "0.95rem" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#eab308" }}>👑</span>
+                <div>
+                  <strong>Claim Crown:</strong> The first player to land exactly on a crown cell claims the crown and becomes King!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#eab308" }}>⭐</span>
+                <div>
+                  <strong>Royal Bonus:</strong> The King receives a <strong>+2 movement speed</strong> on all subsequent rolls!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#eab308" }}>⚔️</span>
+                <div>
+                  <strong>Challenge/Steal:</strong> If any player lands on the King's current cell, they steal the crown and claim the throne!
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#eab308" }}>🏆</span>
+                <div>
+                  <strong>Victory Bonus:</strong> Holding the crown near the finish line (positions 90-99) makes the King **immune to snake bites** and upgrades the speed bonus to **+4**!
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "black-hole":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ background: "rgba(168, 85, 247, 0.1)", borderLeft: "4px solid #a855f7", padding: "1rem", borderRadius: "8px" }}>
+              <strong style={{ color: "white", fontSize: "1.05rem" }}>Space-Time Collapse 🕳️</strong>
+              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                Venture through cosmic wormholes that warp you randomly across space, with a small chance to exit right before the finish!
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", color: "var(--text-main)", fontSize: "0.95rem" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#a855f7" }}>🕳️</span>
+                <div>
+                  <strong>Absorption:</strong> Landing on a black hole cell sucks you in and teleports you to another random black hole cell on the board.
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#a855f7" }}>🌌</span>
+                <div>
+                  <strong>Unpredictability:</strong> Teleport destinations are randomized, making warp hops highly chaotic and unpredictable.
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem", color: "#a855f7" }}>⚠️</span>
+                <div>
+                  <strong>Rare Warp Event (10%):</strong> There is a 10% chance the black hole collapse will blast you into the final stretch (cells 95-99) right before the finish!
                 </div>
               </div>
             </div>

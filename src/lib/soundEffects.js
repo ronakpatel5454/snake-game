@@ -252,3 +252,30 @@ export const playVictorySound = () => {
     osc.stop(noteTime + duration + 0.05);
   });
 };
+
+// 8. Teleport / Warp: A cool sci-fi frequency sweep with high reverb-like fade
+export const playTeleportSound = () => {
+  if (isMuted) return;
+  const ctx = getAudioContext();
+  const now = ctx.currentTime;
+  
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  
+  osc.type = "sine";
+  // Sci-fi warp sweep: low to high then back down quickly
+  osc.frequency.setValueAtTime(150, now);
+  osc.frequency.exponentialRampToValueAtTime(1200, now + 0.25);
+  osc.frequency.exponentialRampToValueAtTime(300, now + 0.5);
+  
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.3, now + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+  
+  osc.start(now);
+  osc.stop(now + 0.6);
+};
+

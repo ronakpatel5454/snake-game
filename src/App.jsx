@@ -57,6 +57,7 @@ import {
   playSixSound, 
   playClashSound, 
   playVictorySound, 
+  playTeleportSound,
   toggleMute, 
   getMutedState 
 } from "./lib/soundEffects";
@@ -315,6 +316,18 @@ export default function App() {
       return saved ? JSON.parse(saved) : 5;
     } catch { return 5; }
   });
+  const [setupCrownsCount, setSetupCrownsCount] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_setupCrownsCount");
+      return saved ? JSON.parse(saved) : 1;
+    } catch { return 1; }
+  });
+  const [setupBlackHolesCount, setSetupBlackHolesCount] = useState(() => {
+    try {
+      const saved = localStorage.getItem("snake_game_setupBlackHolesCount");
+      return saved ? JSON.parse(saved) : 4;
+    } catch { return 4; }
+  });
   const [activeTheme, setActiveTheme] = useState(() => {
     try {
       const saved = localStorage.getItem("snake_game_activeTheme");
@@ -456,11 +469,13 @@ export default function App() {
       localStorage.setItem("snake_game_gameMode", JSON.stringify(gameMode));
       localStorage.setItem("snake_game_setupSnakesCount", JSON.stringify(setupSnakesCount));
       localStorage.setItem("snake_game_setupLaddersCount", JSON.stringify(setupLaddersCount));
+      localStorage.setItem("snake_game_setupCrownsCount", JSON.stringify(setupCrownsCount));
+      localStorage.setItem("snake_game_setupBlackHolesCount", JSON.stringify(setupBlackHolesCount));
       localStorage.setItem("snake_game_activeTheme", JSON.stringify(activeTheme));
     } catch (e) {
       console.error("Failed to save game state to localStorage", e);
     }
-  }, [inGame, players, board, currentTurnIndex, logs, diceValue, winner, gameMode, setupSnakesCount, setupLaddersCount, activeTheme, isOnline, isRolling, isDiceRolling]);
+  }, [inGame, players, board, currentTurnIndex, logs, diceValue, winner, gameMode, setupSnakesCount, setupLaddersCount, setupCrownsCount, setupBlackHolesCount, activeTheme, isOnline, isRolling, isDiceRolling]);
 
   const handleShowRules = (mode) => {
     setRulesMode(mode || gameMode || "classic");
@@ -558,7 +573,11 @@ export default function App() {
     return result;
   };
 
-  const handleCreateOnlineRoom = async ({ hostName, hostColor, hostSnake, theme, customElements, snakesCount, laddersCount, shuffleInterval = 1 }) => {
+  const handleCreateOnlineRoom = async ({ hostName, hostColor, hostSnake, theme, customElements, snakesCount, laddersCount, shuffleInterval = 1, crownsCount = 1, blackHolesCount = 4 }) => {
+    setSetupSnakesCount(snakesCount);
+    setSetupLaddersCount(laddersCount);
+    setSetupCrownsCount(crownsCount);
+    setSetupBlackHolesCount(blackHolesCount);
     setIsConnecting(true);
     try {
       const code = generateRoomCode();
@@ -1015,6 +1034,10 @@ export default function App() {
       setActiveTheme(game.theme);
       setSetupSnakesCount(game.setup_snakes_count);
       setSetupLaddersCount(game.setup_ladders_count);
+      if (game.board) {
+        if (game.board.crowns) setSetupCrownsCount(game.board.crowns.length);
+        if (game.board.blackHoles) setSetupBlackHolesCount(game.board.blackHoles.length);
+      }
 
       const fetchPlayers = async () => {
         const { data: playersList } = await supabase
@@ -1417,7 +1440,7 @@ export default function App() {
   };
 
   // --- Synced Walk / Slide Turn Animation ---
-  const executeTurnAnimationOnly = async ({ playerId, roll, startPos, targetPos, boardElements }) => {
+  const executeTurnAnimationOnly = async ({ playerId, roll, startPos, targetPos, boardElements, walkDist }) => {
     if (rollingTimeoutRef.current) {
       clearTimeout(rollingTimeoutRef.current);
       rollingTimeoutRef.current = null;
@@ -1478,23 +1501,23 @@ export default function App() {
         await new Promise(resolve => setTimeout(resolve, 400));
       } else {
         // Walk forward
-        let walkDist = roll;
-        if (gameMode === "beast-snakes") {
+        let finalWalkDist = walkDist !== undefined ? walkDist : roll;
+        if (gameMode === "beast-snakes" && walkDist === undefined) {
           const activePlayerObj = latestPlayers.find(p => p.id === playerId);
           const unlockAttempts = activePlayerObj ? (activePlayerObj.unlockAttempts || 0) : 0;
           if (unlockAttempts >= 200 && unlockAttempts <= 202) {
-            walkDist = Math.max(1, Math.floor(roll / 2));
+            finalWalkDist = Math.max(1, Math.floor(roll / 2));
           }
         }
 
-        if (startPos + walkDist <= 100) {
-          for (let step = startPos + 1; step <= startPos + walkDist; step++) {
+        if (startPos + finalWalkDist <= 100) {
+          for (let step = startPos + 1; step <= startPos + finalWalkDist; step++) {
             playMoveSound();
             setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: step, isWalking: true, lastRoll: roll } : p));
             await new Promise(resolve => setTimeout(resolve, 350));
           }
           setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isWalking: false } : p));
-          currentPos = startPos + walkDist;
+          currentPos = startPos + finalWalkDist;
           await new Promise(resolve => setTimeout(resolve, 400));
         }
       }
@@ -1506,6 +1529,13 @@ export default function App() {
         setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: boardElements.top } : p));
         await new Promise(resolve => setTimeout(resolve, 900));
         setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isClimbing: false } : p));
+      } else if (boardElements && boardElements.type === "black-hole") {
+        playTeleportSound();
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isTeleporting: true } : p));
+        await new Promise(resolve => setTimeout(resolve, 600));
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, position: boardElements.destination } : p));
+        await new Promise(resolve => setTimeout(resolve, 600));
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isTeleporting: false } : p));
       } else if (boardElements && boardElements.type === "snake") {
         playSnakeBiteSound();
         setPlayers(prev => prev.map(p => 
@@ -2088,10 +2118,12 @@ export default function App() {
   };
 
   // --- Game Control Actions ---
-  const startGame = (setupPlayers, numSnakes = 3, numLadders = 5, selectedTheme = "classic", shuffleInt = 1, shuffleLads = false) => {
+  const startGame = (setupPlayers, numSnakes = 3, numLadders = 5, selectedTheme = "classic", shuffleInt = 1, shuffleLads = false, finalCrowns = 1, finalBlackHoles = 4) => {
     setSetupSnakesCount(numSnakes);
     setSetupLaddersCount(numLadders);
     setShuffleInterval(shuffleInt);
+    setSetupCrownsCount(finalCrowns);
+    setSetupBlackHolesCount(finalBlackHoles);
     const initialPlayers = setupPlayers.map(p => ({
       ...p,
       snakeBiteCount: 0,
@@ -2103,7 +2135,8 @@ export default function App() {
     }));
     setPlayers(initialPlayers);
     const playerSnakeHeads = gameMode === "own-snake" ? setupPlayers.map(p => p.ownSnakeNumber) : [];
-    const generated = generateBoard(playerSnakeHeads, numSnakes, numLadders, gameMode);
+    const generated = generateBoard(playerSnakeHeads, numSnakes, numLadders, gameMode, finalCrowns, finalBlackHoles);
+    generated.crownOwners = {};
     if (gameMode === "shuffle-snake" || gameMode === "tornado") {
       generated.shuffleInterval = shuffleInt;
       generated.shuffleLadders = shuffleLads;
@@ -2117,7 +2150,7 @@ export default function App() {
     setActiveTheme(selectedTheme);
   };
 
-  const handleStartOnlineGame = async (finalSnakes, finalLadders, selectedTheme, shuffleInt = 1, shuffleLads = false) => {
+  const handleStartOnlineGame = async (finalSnakes, finalLadders, selectedTheme, shuffleInt = 1, shuffleLads = false, finalCrowns = 1, finalBlackHoles = 4) => {
     try {
       const { data: game } = await supabase
         .from("games")
@@ -2128,7 +2161,8 @@ export default function App() {
       if (!game) return;
 
       const playerSnakeHeads = gameMode === "own-snake" ? joinedPlayers.map(p => p.ownSnakeNumber) : [];
-      const generated = generateBoard(playerSnakeHeads, finalSnakes, finalLadders, gameMode);
+      const generated = generateBoard(playerSnakeHeads, finalSnakes, finalLadders, gameMode, finalCrowns, finalBlackHoles);
+      generated.crownOwners = {};
       if (gameMode === "shuffle-snake" || gameMode === "tornado") {
         generated.shuffleInterval = shuffleInt;
         generated.shuffleLadders = shuffleLads;
@@ -2182,7 +2216,8 @@ export default function App() {
         if (!game) return;
 
         const playerSnakeHeads = gameMode === "own-snake" ? players.map(p => p.ownSnakeNumber) : [];
-        const generated = generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount, gameMode);
+        const generated = generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount, gameMode, setupCrownsCount, setupBlackHolesCount);
+        generated.crownOwners = {};
         if (gameMode === "shuffle-snake" || gameMode === "tornado") {
           generated.shuffleInterval = board ? board.shuffleInterval : 1;
           generated.shuffleLadders = board ? board.shuffleLadders : false;
@@ -2226,11 +2261,13 @@ export default function App() {
       lastRoll: 1,
       snakeBiteCount: 0,
       consecutiveSixes: 0,
-      hasBeenBittenBySnake: false
+      hasBeenBittenBySnake: false,
+      hasCrown: false
     }));
     setPlayers(resetPlayers);
     const playerSnakeHeads = gameMode === "own-snake" ? resetPlayers.map(p => p.ownSnakeNumber) : [];
-    const generated = generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount, gameMode);
+    const generated = generateBoard(playerSnakeHeads, setupSnakesCount, setupLaddersCount, gameMode, setupCrownsCount, setupBlackHolesCount);
+    generated.crownOwners = {};
     if (gameMode === "shuffle-snake" || gameMode === "tornado") {
       generated.shuffleInterval = board ? board.shuffleInterval : 1;
       generated.shuffleLadders = board ? board.shuffleLadders : false;
@@ -2670,8 +2707,8 @@ export default function App() {
       await new Promise(resolve => setTimeout(resolve, 400));
     } else {
       // Normal walk forward (including poisoned halved rolls)
-      let walkDist = roll;
-      if (gameMode === "beast-snakes") {
+      let walkDist = outcome.walkDist !== undefined ? outcome.walkDist : roll;
+      if (gameMode === "beast-snakes" && outcome.walkDist === undefined) {
         const unlockAttempts = currentPlayer.unlockAttempts || 0;
         if (unlockAttempts >= 200 && unlockAttempts <= 202) {
           walkDist = Math.max(1, Math.floor(roll / 2));
@@ -2690,8 +2727,18 @@ export default function App() {
         currentPos = intermediatePos;
         await new Promise(resolve => setTimeout(resolve, 400));
 
-        // Check for slides / climbs
-        if (finalPos > intermediatePos) {
+        // Check for slides / climbs / warp teleportations
+        const isBlackHole = latestBoard.blackHoles && latestBoard.blackHoles.includes(intermediatePos);
+        if (isBlackHole) {
+          playTeleportSound();
+          boardElements = { type: "black-hole", destination: finalPos };
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isTeleporting: true } : p));
+          await new Promise(resolve => setTimeout(resolve, 600));
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: finalPos, unlockAttempts: updatedAttempts } : p));
+          await new Promise(resolve => setTimeout(resolve, 600));
+          setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, isTeleporting: false } : p));
+          currentPos = finalPos;
+        } else if (finalPos > intermediatePos) {
           // Climbing ladder
           playLadderSound();
           boardElements = { type: "ladder", top: finalPos };
@@ -2739,7 +2786,8 @@ export default function App() {
           startPos: player.position, 
           targetPos: currentPos, 
           boardElements,
-          isAutoRoll
+          isAutoRoll,
+          walkDist
         }
       });
     }
@@ -2747,8 +2795,26 @@ export default function App() {
     const nextTurnIndex = grantsAnotherTurn ? currentTurnIndex : (currentTurnIndex + 1) % players.length;
     const isRoundCompleted = !grantsAnotherTurn && nextTurnIndex === 0;
 
-    let nextBoardLocal = board;
+    let nextBoardLocal = board ? { ...board } : null;
     let localPlayersUpdated = [...playersRef.current];
+
+    if (gameMode === "kings-crown" && nextBoardLocal && nextBoardLocal.crowns) {
+      if (nextBoardLocal.crowns.includes(currentPos)) {
+        nextBoardLocal.crowns = nextBoardLocal.crowns.filter(c => c !== currentPos);
+        if (!nextBoardLocal.crownOwners) nextBoardLocal.crownOwners = {};
+        nextBoardLocal.crownOwners[player.id] = true;
+        logMsg += ` 👑 claimed the Crown!`;
+        playSixSound();
+      } else {
+        const victim = localPlayersUpdated.find(p => p.id !== player.id && p.position === currentPos && nextBoardLocal.crownOwners && nextBoardLocal.crownOwners[p.id]);
+        if (victim) {
+          nextBoardLocal.crownOwners[victim.id] = false;
+          nextBoardLocal.crownOwners[player.id] = true;
+          logMsg += ` ⚔️ stole the Crown from ${victim.name}!`;
+          playClashSound();
+        }
+      }
+    }
     
     if (gameMode === "shuffle-snake" && isRoundCompleted && board) {
       const newRounds = (board.completedRounds || 0) + 1;
@@ -3139,6 +3205,10 @@ export default function App() {
             nextBoardOnline.completedRounds = newRounds;
             updatePayload.board = nextBoardOnline;
             updatePayload.logs = updatedLogs;
+          }
+
+          if (gameMode === "kings-crown") {
+            updatePayload.board = nextBoardLocal;
           }
 
           if (currentPos === 100) {

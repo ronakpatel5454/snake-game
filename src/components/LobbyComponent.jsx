@@ -39,11 +39,34 @@ export default function LobbyComponent({
   const [shuffleInterval, setShuffleInterval] = useState("1");
   const [shuffleLadders, setShuffleLadders] = useState(false);
 
+  const [numCrowns, setNumCrowns] = useState("1");
+  const [numBlackHoles, setNumBlackHoles] = useState("4");
+  const [crownsPreset, setCrownsPreset] = useState("1");
+  const [blackHolesPreset, setBlackHolesPreset] = useState("4");
+
   // Parse and compute validation errors in real-time
   const minSnakes = gameMode === "beast-snakes" ? 0 : 3;
   const numSnakesParsed = parseInt(numSnakes);
   const numLaddersParsed = parseInt(numLadders);
   const shuffleIntervalParsed = parseInt(shuffleInterval);
+  const numCrownsParsed = parseInt(numCrowns);
+  const numBlackHolesParsed = parseInt(numBlackHoles);
+
+  const crownsError = (gameMode === "kings-crown" && crownsPreset === "Other")
+    ? (isNaN(numCrownsParsed) || numCrowns.trim() === ""
+      ? "Please enter a valid number."
+      : numCrownsParsed < 1 || numCrownsParsed > 10
+        ? "Number of crowns must be between 1 and 10."
+        : null)
+    : null;
+
+  const blackHolesError = (gameMode === "black-hole" && blackHolesPreset === "Other")
+    ? (isNaN(numBlackHolesParsed) || numBlackHoles.trim() === ""
+      ? "Please enter a valid number."
+      : numBlackHolesParsed < 1 || numBlackHolesParsed > 10
+        ? "Number of black holes must be between 1 and 10."
+        : null)
+    : null;
 
   const snakesError = isNaN(numSnakesParsed) || numSnakes.trim() === ""
     ? "Please enter a valid number."
@@ -158,6 +181,15 @@ export default function LobbyComponent({
       }
     }
 
+    if (gameMode === "kings-crown" && crownsError) {
+      alert(crownsError);
+      return;
+    }
+    if (gameMode === "black-hole" && blackHolesError) {
+      alert(blackHolesError);
+      return;
+    }
+
     let finalSnakes = numSnakesParsed;
     let finalLadders = numLaddersParsed;
 
@@ -181,6 +213,15 @@ export default function LobbyComponent({
       return;
     }
 
+    let finalCrowns = 1;
+    if (gameMode === "kings-crown") {
+      finalCrowns = crownsPreset === "Other" ? numCrownsParsed : parseInt(crownsPreset);
+    }
+    let finalBlackHoles = 4;
+    if (gameMode === "black-hole") {
+      finalBlackHoles = blackHolesPreset === "Other" ? numBlackHolesParsed : parseInt(blackHolesPreset);
+    }
+
     const finalPlayers = playerConfigs.map((c, i) => ({
       id: `p${i}`,
       name: c.name,
@@ -192,21 +233,17 @@ export default function LobbyComponent({
       lastRoll: 1
     }));
 
-    onStart(finalPlayers, finalSnakes, finalLadders, selectedTheme, shuffleIntervalParsed || 1, shuffleLadders);
+    onStart(finalPlayers, finalSnakes, finalLadders, selectedTheme, shuffleIntervalParsed || 1, shuffleLadders, finalCrowns, finalBlackHoles);
   };
 
   // Online Action triggers
   const handleHostOnline = () => {
-    if (!onlineName.trim()) {
-      alert("Please enter a name first.");
+    if (gameMode === "kings-crown" && crownsError) {
+      alert(crownsError);
       return;
     }
-    if (gameMode === "own-snake" && (onlineOwnSnake < 15 || onlineOwnSnake > 99)) {
-      alert("Safe Snake head must be between 15 and 99.");
-      return;
-    }
-    if (gameMode === "shuffle-snake" && shuffleIntervalError) {
-      alert(shuffleIntervalError);
+    if (gameMode === "black-hole" && blackHolesError) {
+      alert(blackHolesError);
       return;
     }
 
@@ -219,7 +256,9 @@ export default function LobbyComponent({
       snakesCount: numSnakesParsed,
       laddersCount: numLaddersParsed,
       shuffleInterval: shuffleIntervalParsed || 1,
-      shuffleLadders: shuffleLadders
+      shuffleLadders: shuffleLadders,
+      crownsCount: gameMode === "kings-crown" ? (crownsPreset === "Other" ? numCrownsParsed : parseInt(crownsPreset)) : 1,
+      blackHolesCount: gameMode === "black-hole" ? (blackHolesPreset === "Other" ? numBlackHolesParsed : parseInt(blackHolesPreset)) : 4
     });
   };
 
@@ -245,8 +284,12 @@ export default function LobbyComponent({
   };
 
   const handleStartOnline = () => {
-    if (gameMode === "shuffle-snake" && shuffleIntervalError) {
-      alert(shuffleIntervalError);
+    if (gameMode === "kings-crown" && crownsError) {
+      alert(crownsError);
+      return;
+    }
+    if (gameMode === "black-hole" && blackHolesError) {
+      alert(blackHolesError);
       return;
     }
 
@@ -268,7 +311,16 @@ export default function LobbyComponent({
       }
     }
 
-    onStartOnlineGame(finalSnakes, finalLadders, selectedTheme, shuffleIntervalParsed || 1, shuffleLadders);
+    let finalCrowns = 1;
+    if (gameMode === "kings-crown") {
+      finalCrowns = crownsPreset === "Other" ? numCrownsParsed : parseInt(crownsPreset);
+    }
+    let finalBlackHoles = 4;
+    if (gameMode === "black-hole") {
+      finalBlackHoles = blackHolesPreset === "Other" ? numBlackHolesParsed : parseInt(blackHolesPreset);
+    }
+
+    onStartOnlineGame(finalSnakes, finalLadders, selectedTheme, shuffleIntervalParsed || 1, shuffleLadders, finalCrowns, finalBlackHoles);
   };
 
   const handleCopyLink = () => {
@@ -501,6 +553,94 @@ export default function LobbyComponent({
                       </div>
                     )}
                   </>
+                )}
+
+                {gameMode === "kings-crown" && (
+                  <div style={{ marginBottom: "1.5rem" }}>
+                    <label style={{ display: "block", marginBottom: "0.5rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                      👑 Quantity of Crowns (1 - 10)
+                    </label>
+                    <select
+                      value={crownsPreset}
+                      onChange={(e) => {
+                        setCrownsPreset(e.target.value);
+                        if (e.target.value !== "Other") {
+                          setNumCrowns(e.target.value);
+                        }
+                      }}
+                      style={{ width: "100%", marginBottom: "0.5rem" }}
+                    >
+                      <option value="1">1 (Default)</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="5">5</option>
+                      <option value="Other">Other (Custom)</option>
+                    </select>
+                    {crownsPreset === "Other" && (
+                      <>
+                        <input
+                          type="number"
+                          value={numCrowns}
+                          onChange={(e) => setNumCrowns(e.target.value)}
+                          style={{
+                            width: "100%",
+                            borderColor: crownsError ? "#ef4444" : "rgba(255,255,255,0.15)",
+                            outlineColor: crownsError ? "#ef4444" : "transparent"
+                          }}
+                        />
+                        {crownsError && (
+                          <div style={{ color: "#ef4444", fontSize: "0.8rem", marginTop: "0.35rem", fontWeight: "500" }}>
+                            ⚠️ {crownsError}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {gameMode === "black-hole" && (
+                  <div style={{ marginBottom: "1.5rem" }}>
+                    <label style={{ display: "block", marginBottom: "0.5rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                      🕳️ Quantity of Black Holes (1 - 10)
+                    </label>
+                    <select
+                      value={blackHolesPreset}
+                      onChange={(e) => {
+                        setBlackHolesPreset(e.target.value);
+                        if (e.target.value !== "Other") {
+                          setNumBlackHoles(e.target.value);
+                        }
+                      }}
+                      style={{ width: "100%", marginBottom: "0.5rem" }}
+                    >
+                      <option value="4">4 (Default)</option>
+                      <option value="1">1</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="5">5</option>
+                      <option value="8">8</option>
+                      <option value="Other">Other (Custom)</option>
+                    </select>
+                    {blackHolesPreset === "Other" && (
+                      <>
+                        <input
+                          type="number"
+                          value={numBlackHoles}
+                          onChange={(e) => setNumBlackHoles(e.target.value)}
+                          style={{
+                            width: "100%",
+                            borderColor: blackHolesError ? "#ef4444" : "rgba(255,255,255,0.15)",
+                            outlineColor: blackHolesError ? "#ef4444" : "transparent"
+                          }}
+                        />
+                        {blackHolesError && (
+                          <div style={{ color: "#ef4444", fontSize: "0.8rem", marginTop: "0.35rem", fontWeight: "500" }}>
+                            ⚠️ {blackHolesError}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 )}
 
                 {/* Theme Selector */}
@@ -896,6 +1036,94 @@ export default function LobbyComponent({
                 </div>
               )}
             </>
+          )}
+
+          {gameMode === "kings-crown" && (
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", color: "var(--text-muted)", fontSize: "0.95rem" }}>
+                👑 Quantity of Crowns (1 - 10)
+              </label>
+              <select
+                value={crownsPreset}
+                onChange={(e) => {
+                  setCrownsPreset(e.target.value);
+                  if (e.target.value !== "Other") {
+                    setNumCrowns(e.target.value);
+                  }
+                }}
+                style={{ width: "100%", marginBottom: "0.5rem" }}
+              >
+                <option value="1">1 (Default)</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="5">5</option>
+                <option value="Other">Other (Custom)</option>
+              </select>
+              {crownsPreset === "Other" && (
+                <>
+                  <input
+                    type="number"
+                    value={numCrowns}
+                    onChange={(e) => setNumCrowns(e.target.value)}
+                    style={{
+                      width: "100%",
+                      borderColor: crownsError ? "#ef4444" : "rgba(255,255,255,0.15)",
+                      outlineColor: crownsError ? "#ef4444" : "transparent"
+                    }}
+                  />
+                  {crownsError && (
+                    <div style={{ color: "#ef4444", fontSize: "0.8rem", marginTop: "0.35rem", fontWeight: "500" }}>
+                      ⚠️ {crownsError}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {gameMode === "black-hole" && (
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", color: "var(--text-muted)", fontSize: "0.95rem" }}>
+                🕳️ Quantity of Black Holes (1 - 10)
+              </label>
+              <select
+                value={blackHolesPreset}
+                onChange={(e) => {
+                  setBlackHolesPreset(e.target.value);
+                  if (e.target.value !== "Other") {
+                    setNumBlackHoles(e.target.value);
+                  }
+                }}
+                style={{ width: "100%", marginBottom: "0.5rem" }}
+              >
+                <option value="4">4 (Default)</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="5">5</option>
+                <option value="8">8</option>
+                <option value="Other">Other (Custom)</option>
+              </select>
+              {blackHolesPreset === "Other" && (
+                <>
+                  <input
+                    type="number"
+                    value={numBlackHoles}
+                    onChange={(e) => setNumBlackHoles(e.target.value)}
+                    style={{
+                      width: "100%",
+                      borderColor: blackHolesError ? "#ef4444" : "rgba(255,255,255,0.15)",
+                      outlineColor: blackHolesError ? "#ef4444" : "transparent"
+                    }}
+                  />
+                  {blackHolesError && (
+                    <div style={{ color: "#ef4444", fontSize: "0.8rem", marginTop: "0.35rem", fontWeight: "500" }}>
+                      ⚠️ {blackHolesError}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           )}
 
           <div style={{ marginBottom: "2rem", marginTop: "1rem" }}>

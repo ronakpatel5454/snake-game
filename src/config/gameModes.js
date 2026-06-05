@@ -42,6 +42,20 @@ export const GAME_MODES = [
     badge: "Active"
   },
   {
+    id: "kings-crown",
+    title: "King's Crown Mode 👑",
+    description: "Claim the crown to become King! Get +2 movement bonus, challenge others to steal the throne, and unlock victory immunity.",
+    active: true,
+    badge: "Active"
+  },
+  {
+    id: "black-hole",
+    title: "Black Hole Mode 🕳️",
+    description: "Dodge dangerous gravity wells! Landing on a black hole warps you randomly across space-time, with a rare chance to emerge near the finish line.",
+    active: true,
+    badge: "Active"
+  },
+  {
     id: "championship",
     title: "Championship Mode 🏆",
     description: "Ranked multiplayer with timed turns, hazard cells, and competitive match lobbies.",

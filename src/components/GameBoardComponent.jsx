@@ -168,6 +168,19 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
           animation: status-bounce 1.2s infinite ease-in-out;
         }
 
+        /* Teleporting / spinning portal warp animation */
+        @keyframes cookie-teleport {
+          0% { transform: scale(1) rotate(0deg); opacity: 1; filter: brightness(1) blur(0px); }
+          50% { transform: scale(0.1) rotate(720deg); opacity: 0; filter: brightness(2) blur(4.5px); }
+          51% { transform: scale(0.1) rotate(720deg); opacity: 0; filter: brightness(2) blur(4.5px); }
+          100% { transform: scale(1) rotate(1440deg); opacity: 1; filter: brightness(1) blur(0px); }
+        }
+
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
         /* Premium line-drawing & blur-brightness flash board-shuffle animations */
         .board-shuffle-container {
           animation: board-shuffle-in 0.95s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
@@ -298,6 +311,92 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
               zIndex: 2
             }}
           />
+        );
+      })}
+
+      {/* Draw Crowns in King's Crown Mode */}
+      {gameMode === "kings-crown" && board.crowns && board.crowns.map((cell) => {
+        const { x, y } = getCoordinates(cell);
+        return (
+          <div
+            key={`crown-cell-${cell}`}
+            style={{
+              position: "absolute",
+              left: x,
+              top: y,
+              width: cellSize,
+              height: cellSize,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 4,
+              pointerEvents: "none"
+            }}
+          >
+            {/* Pulsing Aura */}
+            <div
+              className="status-bubble"
+              style={{
+                position: "absolute",
+                width: "80%",
+                height: "80%",
+                borderRadius: "50%",
+                background: "radial-gradient(circle, rgba(234,179,8,0.25) 0%, rgba(234,179,8,0) 70%)",
+                border: "1.5px solid rgba(234,179,8,0.6)",
+                boxShadow: "0 0 12px rgba(234,179,8,0.5)"
+              }}
+            />
+            {/* Crown Emoji */}
+            <span style={{
+              fontSize: cellSize * 0.55 + "px",
+              filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))",
+              animation: "status-bounce 1.5s infinite ease-in-out"
+            }}>
+              👑
+            </span>
+          </div>
+        );
+      })}
+
+      {/* Draw Black Holes in Black Hole Mode */}
+      {gameMode === "black-hole" && board.blackHoles && board.blackHoles.map((cell) => {
+        const { x, y } = getCoordinates(cell);
+        return (
+          <div
+            key={`blackhole-cell-${cell}`}
+            style={{
+              position: "absolute",
+              left: x,
+              top: y,
+              width: cellSize,
+              height: cellSize,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 4,
+              pointerEvents: "none"
+            }}
+          >
+            {/* Rotating Vortex */}
+            <div
+              style={{
+                width: "75%",
+                height: "75%",
+                borderRadius: "50%",
+                background: "radial-gradient(circle, #000000 30%, #3b0764 65%, #1d4ed8 95%)",
+                boxShadow: "0 0 12px #3b0764, inset 0 0 8px #000",
+                border: "1.5px dashed rgba(139,92,246,0.5)",
+                animation: "spin-slow 3s linear infinite"
+              }}
+            />
+            <span style={{
+              position: "absolute",
+              fontSize: cellSize * 0.45 + "px",
+              filter: "drop-shadow(0 0 4px #000)"
+            }}>
+              🕳️
+            </span>
+          </div>
         );
       })}
 
@@ -1826,6 +1925,8 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
           animationStyle = "cookie-ladder-climb 0.4s infinite ease-in-out";
         } else if (p.isWalking) {
           animationStyle = "cookie-walk 0.35s infinite ease-in-out";
+        } else if (p.isTeleporting) {
+          animationStyle = "cookie-teleport 0.6s ease-in-out forwards";
         } else if (showTornadoAnim) {
           animationStyle = "tornado-shake-anim 1.2s ease-in-out forwards";
         }
@@ -1850,6 +1951,32 @@ export default function GameBoardComponent({ board, players, gameMode, theme = "
           >
             {/* Dynamic theme-based player token matching player color */}
             <PlayerToken theme={theme} color={p.color} />
+
+            {/* King's Crown Badge Overlay */}
+            {gameMode === "kings-crown" && board && board.crownOwners && board.crownOwners[p.id] && (
+              <div
+                className="status-bubble"
+                style={{
+                  position: "absolute",
+                  top: "-6px",
+                  left: "-6px",
+                  background: "#eab308",
+                  borderRadius: "50%",
+                  width: cellSize * 0.4 + "px",
+                  height: cellSize * 0.4 + "px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: cellSize * 0.28 + "px",
+                  boxShadow: "0 0 8px #eab308, 0 2px 4px rgba(0,0,0,0.4)",
+                  border: "1.5px solid white",
+                  zIndex: 35
+                }}
+                title={p.position >= 90 ? "King (Victory Bonus Active: +4 speed, Snake Immune!)" : "King (+2 movement bonus!)"}
+              >
+                👑
+              </div>
+            )}
 
             {/* Dynamic status effect indicators for beast-snakes mode */}
             {(() => {
